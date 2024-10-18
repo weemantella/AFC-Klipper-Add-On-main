@@ -392,7 +392,7 @@ class afc:
                             self.gcode.respond_info(CUR_LANE.name.upper() + ' ' + msg)
         if check_success == True:
             self.gcode.respond_info(logo)
-            if self.buffer_type != '':
+            if self.buffer_type != '' and self.printer.lookup_object('AFC').current != None:
                 self.buffer = self.printer.lookup_object('AFC_buffer {}'.format(self.buffer_type))
                 self.buffer.enable_buffer()
         else:
