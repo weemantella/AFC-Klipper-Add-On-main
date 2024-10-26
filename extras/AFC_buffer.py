@@ -24,6 +24,18 @@ class AFCtrigger:
         self.debug = config.getboolean("debug", False)
         self.buttons = self.printer.load_object(config, "buttons")
 
+        # LED SETTINGS
+        self.led_index = config.get('led_index', None)
+        self.led = False
+        if self.led_index is not None:
+            self.led = True
+            self.led_index = config.get('led_index')
+            self.led_advancing = config.get('led_advancing','1,.5,0,0')
+            self.led_trailing = config.get('led_trailing','0,1,1,0')
+            self.led_buffer_enabled = config.get('led_buffer_enable', '0,1,0,0')
+            self.led_buffer_disabled = config.get('led_buffer_enable', '0,0,0,0.5')
+            
+
         # Try and get one of each pin to see how user has configured buffer
         self.advance_pin = config.get('advance_pin', None)
         self.buffer_distance = config.getfloat('distance', None)
@@ -89,18 +101,26 @@ class AFCtrigger:
     def enable_buffer(self):
         if self.turtleneck:
             self._set_extruder_stepper()
+            if self.led:
+                self.AFC.afc_led(self.led_buffer_enabled, self.led_index)
+            self.enable = True
             multiplier = 1.0
             if self.last_state == ADVANCE_STATE_NAME:
                 multiplier = self.multiplier_high
+                if self.led:
+                    self.AFC.afc_led(self.led_trailing, self.led_index)
             elif self.last_state == TRAILING_STATE_NAME:
                 multiplier = self.multiplier_low
+                if self.led:
+                    self.AFC.afc_led(self.led_trailing, self.led_index)
             self.set_multiplier( multiplier )
-        if self.debug: self.gcode.respond_info("{} buffer enabled".format(self.name.upper()))
-        self.enable = True
+            if self.debug: self.gcode.respond_info("{} buffer enabled".format(self.name.upper()))
 
     def disable_buffer(self):
         self.enable = False
         if self.debug: self.gcode.respond_info("{} buffer disabled".format(self.name.upper()))
+        if self.led:
+            self.AFC.afc_led(self.led_buffer_disabled, self.led_index)
         if self.turtleneck:
             self.reset_multiplier()
 
@@ -132,22 +152,24 @@ class AFCtrigger:
         self.update_rotation_distance(1.0)
 
     def advance_callback(self, eventime, state):
-        self.last_state = state
         if self.printer.state_message == 'Printer is ready' and self.enable and self.last_state != ADVANCE_STATE_NAME:
             if self.AFC.tool_start.filament_present:
                 if self.AFC.current != None:
                     self.set_multiplier( self.multiplier_high )
                     if self.debug: self.gcode.respond_info("Buffer Triggered State: Advancing")
+                    if self.led:
+                        self.AFC.afc_led(self.led_advancing, self.led_index)
 
         self.last_state = ADVANCE_STATE_NAME
 
     def trailing_callback(self, eventime, state):
-        self.last_state = state
         if self.printer.state_message == 'Printer is ready' and self.enable and self.last_state != TRAILING_STATE_NAME:
             if self.AFC.tool_start.filament_present:
                 if self.AFC.current != None:
                     self.set_multiplier( self.multiplier_low )
                     if self.debug: self.gcode.respond_info("Buffer Triggered State: Trailing")
+                    if self.led:
+                        self.AFC.afc_led(self.led_trailing, self.led_index)
 
         self.last_state = TRAILING_STATE_NAME
 
