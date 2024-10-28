@@ -112,8 +112,8 @@ class afc:
         self.afc_bowden_length = bowden_length
         msg = ("Config Bowden Length: {}\n".format(self.config_bowden_length) +
                "Previous Bowden Length: {}\n".format(config_bowden) +
-               "New Bowden Length: {}".format(bowden_length) +
-               "TO SAVE BOWDEN LENGTH afc_bowden_length MUST BE UNPDATED IN AFC.cfg")
+               "New Bowden Length: {}\n".format(bowden_length) +
+               "TO SAVE BOWDEN LENGTH afc_bowden_length MUST BE UPDATED IN AFC.cfg")
         self.gcode.respond_info(msg)
 
     cmd_LANE_MOVE_help = "Lane Manual Movements"
