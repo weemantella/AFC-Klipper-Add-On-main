@@ -114,12 +114,8 @@ class AFCtrigger:
             multiplier = 1.0
             if self.last_state == ADVANCE_STATE_NAME:
                 multiplier = self.multiplier_high
-                if self.led:
-                    self.AFC.afc_led(self.led_trailing, self.led_index)
             elif self.last_state == TRAILING_STATE_NAME:
                 multiplier = self.multiplier_low
-                if self.led:
-                    self.AFC.afc_led(self.led_trailing, self.led_index)
             self.set_multiplier( multiplier )
             if self.debug: self.gcode.respond_info("{} buffer enabled".format(self.name.upper()))
         elif self.belay:
@@ -154,6 +150,11 @@ class AFCtrigger:
         if self.AFC.current is None: return
 
         self.update_rotation_distance( multiplier )
+        if self.led:
+            if multiplier > 1:
+                self.AFC.afc_led(self.led_advancing, self.led_index)
+            elif multiplier < 1:
+                self.AFC.afc_led(self.led_trailing, self.led_index)
         if self.debug:
             stepper = self.printer.lookup_object('AFC_stepper ' + self.AFC.current).extruder_stepper.stepper
             new_rotation_dist = stepper.get_rotation_distance()[0]
@@ -169,8 +170,6 @@ class AFCtrigger:
                 if self.AFC.current != None:
                     self.set_multiplier( self.multiplier_high )
                     if self.debug: self.gcode.respond_info("Buffer Triggered State: Advancing")
-                    if self.led:
-                        self.AFC.afc_led(self.led_advancing, self.led_index)
 
         self.last_state = ADVANCE_STATE_NAME
 
@@ -180,8 +179,6 @@ class AFCtrigger:
                 if self.AFC.current != None:
                     self.set_multiplier( self.multiplier_low )
                     if self.debug: self.gcode.respond_info("Buffer Triggered State: Trailing")
-                    if self.led:
-                        self.AFC.afc_led(self.led_trailing, self.led_index)
 
         self.last_state = TRAILING_STATE_NAME
 
