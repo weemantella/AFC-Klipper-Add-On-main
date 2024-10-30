@@ -1,8 +1,9 @@
-# 8 Track Automated Filament Changer
+# Armored Turtle Automated Filament Changer
 #
 # Copyright (C) 2024 Armored Turtle
 #
 # This file may be distributed under the terms of the GNU GPLv3 license.
+
 import os
 import json
 
@@ -20,8 +21,9 @@ class afc:
         self.current = None
         self.failure = False
         self.lanes = {}
-        # tool position when tool change was requested
-        self.change_tool_pos = None
+        # whether we failed during a tool change. used to determine if the restore position macro
+        # should actually restore gcode state
+        self.failed_in_toolchange = False
         self.tool_start = None
 
         # SPOOLMAN
@@ -662,10 +664,10 @@ class afc:
     cmd_CHANGE_TOOL_help = "change filaments in tool head"
     def cmd_CHANGE_TOOL(self, gcmd):
         lane = gcmd.get('LANE', None)
+        self.failed_in_toolchange = False
         if lane != self.current:
-            store_pos = self.toolhead.get_position()
-            if self.is_homed() and not self.is_paused():
-                self.change_tool_pos = store_pos
+            # Create save state
+            self.gcode.run_script_from_command("SAVE_GCODE_STATE NAME=_AFC_CHANGE_TOOL")
             self.gcode.respond_info(" Tool Change - " + str(self.current) + " -> " + lane)
             if self.current != None:
                 CUR_LANE = self.printer.lookup_object('AFC_stepper ' + self.current)
@@ -676,19 +678,17 @@ class afc:
                     return
             CUR_LANE = self.printer.lookup_object('AFC_stepper ' + lane)
             self.TOOL_LOAD(CUR_LANE)
-            newpos = self.toolhead.get_position()
-            newpos[2] = store_pos[2]
-            self.toolhead.manual_move(newpos, self.tool_unload_speed)
-            self.toolhead.wait_moves()
-            if self.is_printing() and not self.is_paused():
-                self.change_tool_pos = None
+            # Restore state
+            self.gcode.run_script_from_command("RESTORE_GCODE_STATE NAME=_AFC_CHANGE_TOOL MOVE=1 MOVE_SPEED={}".format(self.tool_unload_speed))
+            if self.is_printing() and self.is_paused():
+                self.failed_in_toolchange = True
 
     cmd_RESTORE_CHANGE_TOOL_POS_help = "change filaments in tool head"
     def cmd_RESTORE_CHANGE_TOOL_POS(self, gcmd):
-        if self.change_tool_pos:
-            restore_pos = self.change_tool_pos[:3]
-            self.toolhead.manual_move(restore_pos, self.tool_start_unload_speed)
-            self.toolhead.wait_moves()
+        if self.failed_in_toolchange:
+            # Restore previous state
+            self.failed_in_toolchange = False
+            self.gcode.run_script_from_command("RESTORE_GCODE_STATE NAME=_AFC_CHANGE_TOOL MOVE=1 MOVE_SPEED={}".format(self.tool_unload_speed))
 
     def get_status(self, eventtime):
         str = {}
@@ -698,7 +698,7 @@ class afc:
         # Try to get tool filament sensor, if lookup fails default to None
         try: self.tool = self.printer.lookup_object('filament_switch_sensor tool').runout_helper
         except: self.tool = None
-        # Try to get buffer, if lookup failes degault to None
+        # Try to get buffer, if lookup fails default to None
         try: self.buffer = self.printer.lookup_object('AFC_buffer {}'.format(self.buffer_name))
         except: self.buffer = None
         numoflanes = 0
@@ -711,23 +711,22 @@ class afc:
                 str[UNIT][NAME]['load'] = bool(LANE.load_state)
                 str[UNIT][NAME]["prep"] =bool(LANE.prep_state)
                 str[UNIT][NAME]["loaded_to_hub"] = self.lanes[UNIT][NAME]['hub_loaded']
-                str[UNIT][NAME]["material"] =self.lanes[UNIT][NAME]['material']
-                str[UNIT][NAME]["spool_id"] =self.lanes[UNIT][NAME]['spool_id']
-                str[UNIT][NAME]["color"] =self.lanes[UNIT][NAME]['color']
+                str[UNIT][NAME]["material"] = self.lanes[UNIT][NAME]['material']
+                str[UNIT][NAME]["spool_id"] = self.lanes[UNIT][NAME]['spool_id']
+                str[UNIT][NAME]["color"] = self.lanes[UNIT][NAME]['color']
 
                 numoflanes +=1
-        str["system"]={}
+        str["system"] = {}
         str["system"]['current_load'] = self.current
         # Set status of filament sensors if they exist, false if sensors are not found
         str["system"]['tool_loaded'] = True == self.tool_start.filament_present if self.tool_start is not None else False
         str["system"]['hub_loaded']  = True == self.hub.filament_present  if self.hub is not None else False
         str["system"]['buffer'] = ('{} : {}'.format(
             self.buffer_name.upper(),
-            "compressed" if self.buffer.last_state is 1
-            else "expanded" if self.buffer.last_state is 0
-            else self.buffer.last_state if self.buffer is not None
-            else None))
-        str["system"]['num_units'] = len(self.lanes)a
+            "compressed" if self.buffer.last_state == 1
+            else "expanded" if self.buffer.last_state == 0
+            else self.buffer.last_state) if self.buffer is not None else None)
+        str["system"]['num_units'] = len(self.lanes)
         str["system"]['num_lanes'] = numoflanes
         return str
 
