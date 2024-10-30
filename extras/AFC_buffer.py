@@ -25,6 +25,18 @@ class AFCtrigger:
         self.debug = config.getboolean("debug", False)
         self.buttons = self.printer.load_object(config, "buttons")
 
+        # LED SETTINGS
+        self.led_index = config.get('led_index', None)
+        self.led = False
+        if self.led_index is not None:
+            self.led = True
+            self.led_index = config.get('led_index')
+            self.led_advancing = config.get('led_advancing','1,.5,0,0')
+            self.led_trailing = config.get('led_trailing','0,1,1,0')
+            self.led_buffer_enabled = config.get('led_buffer_enable', '0,1,0,0')
+            self.led_buffer_disabled = config.get('led_buffer_enable', '0,0,0,0.5')
+            
+
         # Try and get one of each pin to see how user has configured buffer
         self.advance_pin = config.get('advance_pin', None)
         self.buffer_distance = config.getfloat('distance', None)
@@ -113,6 +125,8 @@ class AFCtrigger:
     def disable_buffer(self):
         self.enable = False
         if self.debug: self.gcode.respond_info("{} buffer disabled".format(self.name.upper()))
+        if self.led:
+            self.AFC.afc_led(self.led_buffer_disabled, self.led_index)
         if self.turtleneck:
             self.reset_multiplier()
 
@@ -136,7 +150,11 @@ class AFCtrigger:
 
         cur_stepper = self.printer.lookup_object('AFC_stepper ' + self.AFC.current)
         cur_stepper.update_rotation_distance( multiplier )
-
+        if self.led:
+            if multiplier > 1:
+                self.AFC.afc_led(self.led_advancing, self.led_index)
+            elif multiplier < 1:
+                self.AFC.afc_led(self.led_trailing, self.led_index)
         if self.debug:
             stepper = cur_stepper.extruder_stepper.stepper
             self.gcode.respond_info("New rotation distance after applying factor: {}".format(stepper.get_rotation_distance()[0]))
