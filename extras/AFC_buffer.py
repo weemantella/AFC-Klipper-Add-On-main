@@ -5,6 +5,7 @@
 # This file may be distributed under the terms of the GNU GPLv3 license.
 
 from configparser import Error as error
+import threading
 
 ADVANCE_STATE_NAME = "Expanded"
 TRAILING_STATE_NAME = "Compressed"
@@ -25,12 +26,17 @@ class AFCtrigger:
         self.debug = config.getboolean("debug", False)
         self.buttons = self.printer.load_object(config, "buttons")
 
+        # CLOG DETECTION SETTINGS
+        # self.clog_timer = None
+        # self.clog_timer_timeout = config.getfloat('clog_timer', 5)
+
         # LED SETTINGS
         self.led_index = config.get('led_index', None)
         self.led = False
         if self.led_index is not None:
             self.led = True
             self.led_index = config.get('led_index')
+            
 
         # Try and get one of each pin to see how user has configured buffer
         self.advance_pin = config.get('advance_pin', None)
@@ -103,11 +109,12 @@ class AFCtrigger:
 
     def enable_buffer(self):
         if self.turtleneck:
+            # self._set_extruder_stepper()
             self.enable = True
             multiplier = 1.0
             if self.last_state == ADVANCE_STATE_NAME:
                 multiplier = self.multiplier_low
-            elif self.last_state == TRAILING_STATE_NAME:
+            else:
                 multiplier = self.multiplier_high
             self.set_multiplier( multiplier )
             if self.debug: self.gcode.respond_info("{} buffer enabled".format(self.name.upper()))
@@ -125,6 +132,19 @@ class AFCtrigger:
             self.reset_multiplier()
 
     # Turtleneck commands
+    # def _set_extruder_stepper(self):
+    #     if self.printer.state_message == 'Printer is ready' and self.AFC.current != None and not self.enable:
+    #         LANE = self.printer.lookup_object('AFC_stepper ' + self.AFC.current)
+    #         stepper = LANE.extruder_stepper.stepper
+    #         base_rotation_dist = stepper.get_rotation_distance()[0]
+    #         self.base_rotation_dist = base_rotation_dist
+    #         if self.debug: self.gcode.respond_info("Base rotation distance for {}: {}".format(LANE.name.upper(), base_rotation_dist))
+    #         self.update_rotation_distance = lambda m: stepper.set_rotation_distance(
+    #             base_rotation_dist / m
+    #         )
+    #     else:
+    #         return
+
     def set_multiplier(self, multiplier):
         if not self.enable: return
         if self.AFC.current is None: return
@@ -147,31 +167,45 @@ class AFCtrigger:
         cur_stepper.update_rotation_distance( 1 )
         self.gcode.respond_info("Rotation distance reset : {}".format(cur_stepper.extruder_stepper.stepper.get_rotation_distance()[0]))
 
-    def advance_callback(self, eventime, state):
-        if self.printer.state_message == 'Printer is ready' and self.enable and self.last_state != ADVANCE_STATE_NAME:
-            if self.AFC.tool_start.filament_present:
-                if self.AFC.current != None:
-                    self.set_multiplier( self.multiplier_low )
-                    if self.debug: self.gcode.respond_info("Buffer Triggered State: Advancing")
-
-        self.last_state = ADVANCE_STATE_NAME
-
     def trailing_callback(self, eventime, state):
-        if self.printer.state_message == 'Printer is ready' and self.enable and self.last_state != TRAILING_STATE_NAME:
+        if self.printer.state_message == 'Printer is ready' and self.enable:
             if self.AFC.tool_start.filament_present:
                 if self.AFC.current != None:
-                    self.set_multiplier( self.multiplier_high )
-                    if self.debug: self.gcode.respond_info("Buffer Triggered State: Trailing")
+                    if state:
+                        self.set_multiplier( self.multiplier_high )
+                        if self.debug: self.gcode.respond_info("Buffer Triggered State: Advancing, setting high")
+                    else:
+                        self.set_multiplier( self.multiplier_low )
+                        if self.debug: self.gcode.respond_info("Buffer Triggered State: Advancing, setting low")
 
-        self.last_state = TRAILING_STATE_NAME
+        if state: self.last_state = TRAILING_STATE_NAME
+
+    def advance_callback(self, eventime, state):
+        if self.printer.state_message == 'Printer is ready' and self.enable:
+            if self.AFC.tool_start.filament_present:
+                if self.AFC.current != None:
+                    cur_stepper = self.printer.lookup_object('AFC_stepper ' + self.AFC.current)
+                    if state:
+                        cur_stepper.extruder_stepper.sync_to_extruder( None )
+                        if self.debug: self.gcode.respond_info("Buffer Triggered State: Trailing\nsteppers not synced\ndropping to advanced sensor\nPOSSIBLE CLOG")
+                        # self.start_clog_timer()
+                    else:
+                        if cur_stepper.extruder_stepper.motion_queue == None:
+                            cur_stepper.extruder_stepper.sync_to_extruder(cur_stepper.extruder_name)
+                            if self.debug: self.gcode.respond_info("Steppers synced")
+                        self.set_multiplier( self.multiplier_low )
+                        if self.debug: self.gcode.respond_info("Buffer Triggered State: Trailing, setting low")
+                        # self.cancel_clog_timer()
+
+        if state: self.last_state = ADVANCE_STATE_NAME
 
     def buffer_status(self):
         state_info = ''
         if self.turtleneck:
             if self.last_state == TRAILING_STATE_NAME:
-                state_info += "Expanded"
+                state_info += "Compressed"
             elif self.last_state == ADVANCE_STATE_NAME:
-                state_info = "Compressed"
+                state_info = "Expanded"
             elif self.last_state != TRAILING_STATE_NAME or ADVANCE_STATE_NAME:
                 state_info += "buffer tube floating in the middle"
         else:
@@ -209,10 +243,10 @@ class AFCtrigger:
                 if change_factor <= 0:
                     self.gcode.respond_info("FACTOR must be greater than 0")
                     return
-                elif change_factor == 1.0:
-                    stepper = self.printer.lookup_object('AFC_stepper ' + self.AFC.current).extruder_stepper.stepper
-                    stepper.set_rotation_distance(self.base_rotation_dist)
-                    self.gcode.respond_info("Rotation distance reset to base value: {}".format(self.base_rotation_dist))
+                # elif change_factor == 1.0:
+                #     stepper = self.printer.lookup_object('AFC_stepper ' + self.AFC.current).extruder_stepper.stepper
+                #     stepper.set_rotation_distance(self.base_rotation_dist)
+                #     self.gcode.respond_info("Rotation distance reset to base value: {}".format(self.base_rotation_dist))
                 else:
                     self.set_multiplier(change_factor)
             else:
@@ -232,6 +266,8 @@ class AFCtrigger:
             current state of the buffer sensor.
             - If the `turtleneck` feature is not enabled, only the buffer state is
             reported.
+            - The buffer state is reported as 'compressed' if the last state indicates
+            compression, or 'expanded' otherwise.
             - Both the buffer state and, if applicable, the stepper motor's rotation
             distance are sent back as G-code responses.
         """
@@ -245,6 +281,24 @@ class AFCtrigger:
                 state_info += ("\n{} Rotation distance: {}".format(LANE.name.upper(), rotation_dist))
 
         self.gcode.respond_info("{} : {}".format(self.name, state_info))
+
+    # def start_clog_timer(self):
+    #     """Starts timer when clog is detected"""
+    #     if self.clog_timer is not None:
+    #         self.clog_timer.cancel()  # Cancel any existing timer before starting a new one
+    #     self.clog_timer = threading.Timer(self.clog_timer_timeout, self.clog_time_exceeded)
+    #     self.clog_timer.start()
+
+    # def cancel_clog_timer(self):
+    #     """Cancels glog timer"""
+    #     if self.clog_timer is not None:
+    #         self.clog_timer.cancel()
+    #         self.clog_timer = None
+
+    # def clog_time_exceeded(self):
+    #     """Callback function for when the timer expires."""
+    #     self.gcode.respond_info("possible clog detected\nPAUSING")
+    #     self.gcode.run_script_from_command('PAUSE')
 
 def load_config_prefix(config):
     return AFCtrigger(config)
