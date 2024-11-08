@@ -100,7 +100,8 @@ class AFCtrigger:
             return
         # clog_sensitivity 1-10 seconds
         self.clog_sensitivity = self.error_sensitivity
-        # set value for filament faults based on error_sensitiviy input. This will output 10-100mm of 
+        # set value for filament faults based on error_sensitiviy input
+        # This will output 10-100mm which will be referenced for extruder distance traveled before the state change of the sensor
         self.fault_sensitivity = self.error_sensitivity * 10
 
     def _handle_ready(self):
