@@ -126,7 +126,7 @@ class AFCtrigger:
             self.min_event_systime  = self.reactor.monotonic()
 
      # Belay Call back
-    def belay_sensor_callback(self, eventime, state):
+    def belay_sensor_callback(self, eventtime, state):
         if not self.last_state and state:
             if self.printer.state_message == 'Printer is ready' and self.enable:
                 cur_stepper = self.printer.lookup_object('AFC_stepper ' + self.AFC.current)
@@ -195,7 +195,7 @@ class AFCtrigger:
         cur_stepper.update_rotation_distance( 1 )
         self.gcode.respond_info("Rotation distance reset : {}".format(cur_stepper.extruder_stepper.stepper.get_rotation_distance()[0]))
 
-    def advance_callback(self, eventime, state):
+    def advance_callback(self, eventtime, state):
         if self.printer.state_message == 'Printer is ready' and self.enable:
             CUR_LANE = self.printer.lookup_object('AFC_stepper ' + self.AFC.current)
             CUR_EXTRUDER = self.printer.lookup_object('AFC_extruder ' + CUR_LANE.extruder_name)
@@ -224,7 +224,7 @@ class AFCtrigger:
         if state: self.last_state = ADVANCE_STATE_NAME
         if not state: self.last_state = False
 
-    def trailing_callback(self, eventime, state):
+    def trailing_callback(self, eventtime, state):
         if self.printer.state_message == 'Printer is ready' and self.enable:
             CUR_LANE = self.printer.lookup_object('AFC_stepper ' + self.AFC.current)
             CUR_EXTRUDER = self.printer.lookup_object('AFC_extruder ' + CUR_LANE.extruder_name)
