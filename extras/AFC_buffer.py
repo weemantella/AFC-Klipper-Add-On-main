@@ -201,11 +201,25 @@ class AFCtrigger:
             CUR_EXTRUDER = self.printer.lookup_object('AFC_extruder ' + CUR_LANE.extruder_name)
             if CUR_EXTRUDER.tool_start_state:
                 if self.AFC.current != None:
-                    CUR_LANE.assist(self.velocity / 100)
-                    self.reactor.pause(self.reactor.monotonic() + 1)
-                    CUR_LANE.assist(0)
-                    self.set_multiplier( self.multiplier_low )
-                    if self.debug: self.gcode.respond_info("Buffer Triggered State: Advanced")
+                    if state:
+                        CUR_LANE.assist(self.velocity / 100)
+                        self.reactor.pause(self.reactor.monotonic() + 1)
+                        CUR_LANE.assist(0)
+                        if self.debug:
+                            self.gcode.respond_info("Buffer Triggered State: Advanced\nWATCHING FOR CLOG")
+                        self.set_multiplier( (self.multiplier_low + self.multiplier_low) / 5 )
+                        if self.debug: self.gcode.respond_info("Buffer Triggered State: Advanced, setting Extra low")
+                        # Start clog watch
+                        if self.turtle_fault_enabled():
+                            self.update_filament_error_pos(eventtime)
+                            self.reactor.update_timer(self.extruder_pos_timer, self.reactor.NOW)
+                    else:
+                        self.set_multiplier( self.multiplier_low )
+                        if self.debug: self.gcode.respond_info("Buffer Triggered State: Off Advanced, cancel clog watch")
+                        # if state changed before timer expires, disable clog timer
+                        if self.turtle_fault_enabled():
+                            self.update_filament_error_pos(eventtime)
+                            self.reactor.update_timer(self.extruder_pos_timer, self.reactor.NEVER)
 
         if state: self.last_state = ADVANCE_STATE_NAME
         if not state: self.last_state = False
