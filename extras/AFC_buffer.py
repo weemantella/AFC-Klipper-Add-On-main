@@ -31,7 +31,7 @@ class AFCtrigger:
         self.estimated_print_time = None
         self.min_event_systime    = self.reactor.NEVER
         # error sensitivity, 0 disables, 1 is the most, 10 is the least
-        self.error_sensitivity    = config.getfloat("filament_error_sensitivity", default=5, minval=0, maxval=10)
+        self.error_sensitivity    = config.getfloat("filament_error_sensitivity", default=0, minval=0, maxval=10)
         self.fault_sensitivity    = self.error_sensitivity * 10
         self.filament_error_pos   = None
         self.past_position        = None
@@ -170,6 +170,8 @@ class AFCtrigger:
             self.AFC.afc_led(self.AFC.led_buffer_disabled, self.led_index)
         if self.turtleneck:
             self.reset_multiplier()
+            if self.is_printing and self.error_sensitivity > 0:
+                self.reactor.update_timer(self.extruder_pos_timer, self.reactor.NEVER)
         self.last_state = False
 
     # Turtleneck commands
