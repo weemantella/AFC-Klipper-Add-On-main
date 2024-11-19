@@ -1,4 +1,3 @@
-#import chelper
 from . import AFC
 
 class afc_hub:

@@ -231,6 +231,7 @@ fi
 
 if [ "$PRIOR_INSTALLATION" = "True" ] && [ "$AUTO_UPDATE_CONFIG" = True ]; then
   print_msg INFO "  Auto updating configuration files..."
+  print_msg INFO "  This will still require manual review and potential configuration. Visit the Github page for more info."
   auto_update
   exit 0
 fi
@@ -242,7 +243,7 @@ if [ "$PRIOR_INSTALLATION" = "False" ] || [ "$UPDATE_CONFIG" = "True" ]; then
   choose_board_type
   toolhead_pin
   buffer_system
-
+  replace_varfile_path
   print_section_delimiter
 
   macro_helpers
@@ -282,10 +283,13 @@ if [ "$PRIOR_INSTALLATION" = "False" ] || [ "$UPDATE_CONFIG" = "True" ]; then
   # Update buffer configuration
   if [ "$BUFFER_SYSTEM" == "TurtleNeck" ]; then
     append_buffer_config "TurtleNeck"
+    add_buffer_to_extruder "${AFC_CONFIG_PATH}/AFC_Hardware.cfg" "TN"
   elif [ "$BUFFER_SYSTEM" == "TurtleNeckV2" ]; then
     append_buffer_config "TurtleNeckV2"
+    add_buffer_to_extruder "${AFC_CONFIG_PATH}/AFC_Hardware.cfg" "TN2"
   elif [ "$BUFFER_SYSTEM" == "AnnexBelay" ]; then
     append_buffer_config "AnnexBelay"
+    add_buffer_to_extruder "${AFC_CONFIG_PATH}/AFC_Hardware.cfg" "Belay"
   else
     print_msg WARNING "  Buffer not configured, skipping configuration."
   fi
