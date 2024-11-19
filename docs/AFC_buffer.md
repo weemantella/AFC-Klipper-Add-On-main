@@ -133,3 +133,18 @@ This command allows the adjustment of rotation distance of the current AFC stepp
 
 Example Usage:
 `SET_ROTATION_FACTOR FACTOR=1.1`
+
+## Filament Fault Detection
+_for TurtleNeck Style Buffers_
+
+### Config Addition
+
+```
+filament_error_sensitivity: 5 # Value 0-10, 0 disables 10 is the least sensitive
+```
+
+### Expected Performance
+
+As the buffer moves onto the Advance sensor, the AFC will quickly slow the feed of filament. As the buffer moves onto the Trailing sensor, the AFC will quickly feed more filament. If the buffer stays at either sensor longer longer than the sensitivity allows the print will pause. The Sensitivity relates to the distance traveled by the primary extruder, 1 being 10mm, 10 being 100mm.
+
+If the buffer stays expanded, a clog is likely. If the buffer stays compressed, an AFC feed issue is likely.
