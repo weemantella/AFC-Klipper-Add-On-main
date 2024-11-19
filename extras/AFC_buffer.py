@@ -60,7 +60,7 @@ class AFCtrigger:
             self.trailing_pin     = config.get('trailing_pin')
             self.multiplier_high  = config.getfloat("multiplier_high", default=1.1, minval=1.0)
             self.multiplier_low   = config.getfloat("multiplier_low", default=0.9, minval=0.0, maxval=1.0)
-            self.velocity = config.getfloat('velocity', 0)
+            self.velocity         = config.getfloat('velocity', 0)
 
         # Pull config for Belay style buffer (single switch)
         elif self.buffer_distance is not None:
@@ -89,7 +89,7 @@ class AFCtrigger:
 
         # Turtleneck Buffer
         if self.turtleneck:
-            self.buttons.register_buttons([self.advance_pin], self.advance_callback)
+            self.buttons.register_buttons([self.advance_pin] , self.advance_callback)
             self.buttons.register_buttons([self.trailing_pin], self.trailing_callback)
             self.gcode.register_mux_command("SET_ROTATION_FACTOR", "AFC_trigger", None, self.cmd_SET_ROTATION_FACTOR, desc=self.cmd_LANE_ROT_FACTOR_help)
 
@@ -303,7 +303,7 @@ class AFCtrigger:
                 msg += '\n CLOG DETECTED'
             if self.last_state == TRAILING_STATE_NAME:
                 msg += '\n AFC NOT FEEDING'
-            elif not CUR_LANE.prep_state:
+            elif CUR_LANE.prep_state == False:
                 msg += '\nFilament runout'
             self.min_event_systime = self.reactor.NEVER
             self.AFC.AFC_error( msg, True )
