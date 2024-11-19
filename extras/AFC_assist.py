@@ -49,6 +49,7 @@ class AFCassistMotor:
                 'shutdown_value', 0., minval=0., maxval=self.scale) / self.scale
         self.mcu_pin.setup_start_value(self.last_value, self.shutdown_value)
 
+
     def get_status(self, eventtime):
         return {'value': self.last_value}
 
@@ -79,3 +80,5 @@ class AFCassistMotor:
             return systime + time_diff
         self._set_pin(print_time + PIN_MIN_TIME, self.last_value, True)
         return systime + self.resend_interval
+
+    

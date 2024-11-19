@@ -8,6 +8,7 @@ import math
 import chelper
 from kinematics import extruder
 from . import AFC_assist
+
 #LED
 BACKGROUND_PRIORITY_CLOCK = 0x7fffffff00000000
 BIT_MAX_TIME=.000004
@@ -47,15 +48,16 @@ class AFCExtruderStepper:
     def __init__(self, config):
         self.config = config
         self.printer = config.get_printer()
+        self.name = config.get_name().split()[-1]
         self.reactor = self.printer.get_reactor()
         self.extruder_stepper = extruder.ExtruderStepper(config)
         self.extruder_name = config.get('extruder')
-        self.name = config.get_name().split()[-1]
+        self.gcode_cmd = config.get('cmd',None)
+        
         self.motion_queue = None
         self.status = None
         self.hub_load = False
         self.next_cmd_time = 0.
-        self.reactor = self.printer.get_reactor()
         ffi_main, ffi_lib = chelper.get_ffi()
         self.trapq = ffi_main.gc(ffi_lib.trapq_alloc(), ffi_lib.trapq_free)
         self.trapq_append = ffi_lib.trapq_append
@@ -72,12 +74,13 @@ class AFCExtruderStepper:
         else:
             self.unit = 'Unknown'
             self.index = 0
+        self.hub= ''
         self.hub_dist = config.getfloat('hub_dist',20)
         self.dist_hub = config.getfloat('dist_hub', 60)
         self.afc_motor_speed = config.getfloat('afc_motor_speed', 100)
         # distance to retract filament from the hub
         self.park_dist = config.getfloat('park_dist', 10)
-        self.led_index = config.get('led_index')
+        self.led_index = config.get('led_index', None)
         # lane triggers
         buttons = self.printer.load_object(config, "buttons")
         self.prep = config.get('prep', None)
@@ -92,6 +95,9 @@ class AFCExtruderStepper:
         self.afc_motor_rwd = config.get('afc_motor_rwd', None)
         self.afc_motor_fwd = config.get('afc_motor_fwd', None)
         self.afc_motor_enb = config.get('afc_motor_enb', None)
+        self.afc_motor_fwd_pulse = config.getfloat('afc_motor_fwd_pulse', None)
+        self.afc_motor_fwd_gear_ratio = config.get('afc_motor_fwd_gear_ratio', None)
+        self.afc_motor_fwd_drive_diam = config.getfloat('afc_motor_fwd_drive_diam', None)
         if self.afc_motor_rwd is not None:
             self.afc_motor_rwd = AFC_assist.AFCassistMotor(config, 'rwd')
         if self.afc_motor_fwd is not None:
@@ -109,7 +115,7 @@ class AFCExtruderStepper:
 
         # Get and save base rotation dist
         self.base_rotation_dist = self.extruder_stepper.stepper.get_rotation_distance()[0]
-
+                
     def assist(self, value, is_resend=False):
         if self.afc_motor_rwd is None:
             return
