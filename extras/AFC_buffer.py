@@ -99,6 +99,10 @@ class AFCtrigger:
         """Checks if the turtleneck, fault detection. and enabled"""
         return self.turtleneck and self.error_sensitivity > 0 and self.enable
 
+    def turtle_fault_enabled(self):
+        """Checks if the turtleneck, fault detection. and enabled"""
+        return self.turtleneck and self.error_sensitivity > 0 and self.enable
+
     def _handle_ready(self):
         # set startup delay time
         self.gcode.respond_info('filament error detection enabled')
