@@ -152,3 +152,10 @@ gcode:
 ### Fixed
 - Fixed hub_cut function to work with new structure
 - Added sleeps back to hub_cut with reactor class
+
+## [2024-11-18]
+
+### Added
+- Filament fault detection
+  - clog
+  - AFC feed issues
