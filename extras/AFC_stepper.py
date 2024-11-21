@@ -110,6 +110,9 @@ class AFCExtruderStepper:
         # Get and save base rotation dist
         self.base_rotation_dist = self.extruder_stepper.stepper.get_rotation_distance()[0]
 
+        # BUFFER
+        self.buffer_name = config.get('buffer', None)
+
     def assist(self, value, is_resend=False):
         if self.afc_motor_rwd is None:
             return
@@ -142,8 +145,19 @@ class AFCExtruderStepper:
             lambda print_time: self.afc_motor_enb._set_pin(print_time, enable))
         toolhead.register_lookahead_callback(
             lambda print_time: assit_motor._set_pin(print_time, value))
+        
+    # def do_homing_move(self, movepos, speed, accel, triggered, check_trigger, afc_stop):
+    #     # if not self.can_home:
+    #     #     raise self.printer.command_error(
+    #     #         "No endstop for this manual stepper")
+    #     self.homing_accel = accel
+    #     pos = [movepos, 0., 0., 0.]
+    #     endstops = afc_stop
+    #     phoming = self.printer.lookup_object('homing')
+    #     phoming.manual_home(self, endstops, pos, speed,
+    #                         triggered, check_trigger)
 
-    def move(self, distance, speed, accel, assist_active=False):
+    def move(self, distance, speed, accel, assist_active=False, afc_stop=None):
         """
         Move the specified lane a given distance with specified speed and acceleration.
         This function calculates the movement parameters and commands the stepper motor
@@ -165,6 +179,9 @@ class AFCExtruderStepper:
         value /= self.afc_motor_speed
         if value > 1: value = 1
         if assist_active: self.assist(value)
+
+        # if afc_stop != None:
+        #     self.do_homing_move(distance, speed, accel, True, True, afc_stop)
 
         toolhead = self.printer.lookup_object('toolhead')
         toolhead.flush_step_generation()
@@ -242,8 +259,12 @@ class AFCExtruderStepper:
             toolhead.dwell(self.next_cmd_time - print_time)
         else:
             self.next_cmd_time = print_time
-    
+
     def update_rotation_distance(self, multiplier):
+        # changing_distance = self.extruder_stepper.stepper.get_rotation_distance()[0]
+        # if multiplier != 1:
+        #     self.extruder_stepper.stepper.set_rotation_distance( changing_distance / multiplier )
+        # else:
         self.extruder_stepper.stepper.set_rotation_distance( self.base_rotation_dist / multiplier )
 
 def load_config_prefix(config):

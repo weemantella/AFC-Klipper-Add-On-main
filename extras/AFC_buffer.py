@@ -28,12 +28,10 @@ class AFCtrigger:
         self.buttons       = self.printer.load_object(config, "buttons")
 
         # CLOG SETTINGS
-        self.clog_timer           = None
         self.estimated_print_time = None
         self.min_event_systime    = self.reactor.NEVER
         # error sensitivity, 0 disables, 1 is the most, 10 is the least
         self.error_sensitivity    = config.getfloat("filament_error_sensitivity", default=5, minval=0, maxval=10)
-        self.clog_sensitivity     = self.error_sensitivity
         self.fault_sensitivity    = self.error_sensitivity * 10
         self.filament_error_pos   = None
         self.past_position        = None
@@ -92,7 +90,10 @@ class AFCtrigger:
         if self.turtleneck:
             self.buttons.register_buttons([self.advance_pin] , self.advance_callback)
             self.buttons.register_buttons([self.trailing_pin], self.trailing_callback)
-            self.gcode.register_mux_command("SET_ROTATION_FACTOR", "AFC_trigger", None, self.cmd_SET_ROTATION_FACTOR, desc=self.cmd_LANE_ROT_FACTOR_help)
+            self.gcode.register_mux_command("SET_ROTATION_FACTOR", "AFC_trigger", None,
+                                            self.cmd_SET_ROTATION_FACTOR, desc=self.cmd_LANE_ROT_FACTOR_help)
+            self.gcode.register_mux_command("SET_FAULT_SENSITIVITY", None, None,
+                                            self.cmd_SET_FAULT_SENSITIVITY, desc=self.cmd_SET_FAULT_SENSITIVITY_help)
 
     def turtle_fault_enabled(self):
         """Checks if the turtleneck, fault detection. and enabled"""
@@ -127,8 +128,6 @@ class AFCtrigger:
         if self.printer_ready:
             self.is_printing = True
             self.min_event_systime  = self.reactor.monotonic()
-            if self.turtle_fault_enabled():
-                self.reactor.update_timer(self.extruder_pos_timer, self.reactor.NOW)
 
      # Belay Call back
     def belay_sensor_callback(self, eventtime, state):
@@ -156,15 +155,13 @@ class AFCtrigger:
         if self.turtleneck:
             self.enable = True
             multiplier = 1.0
-            if self.last_state == TRAILING_STATE_NAME:
-                multiplier = self.multiplier_high
-            else:
+            if self.last_state == ADVANCE_STATE_NAME:
                 multiplier = self.multiplier_low
+            else:
+                multiplier = self.multiplier_high
             if self.debug: self.gcode.respond_info("{} buffer enabled".format(self.name.upper()))
             self.set_multiplier( multiplier )
             # Insure that error timer is running when the buffer is enabled
-            if self.is_printing and self.error_sensitivity > 0:
-                self.reactor.update_timer(self.extruder_pos_timer, self.reactor.NOW)
         elif self.belay:
             self.enable = True
             if self.debug: self.gcode.respond_info("{} buffer enabled".format(self.name.upper()))
@@ -212,16 +209,21 @@ class AFCtrigger:
                 # Check if printing and tool loaded
                 if self.is_printing and self.AFC.current != None:
                     if state:
+                        self.set_multiplier( self.multiplier_high * 1.5)
+                        if self.debug:
+                            self.gcode.respond_info("Buffer Triggered State: Trailing, setting extra high")
+                        if self.turtle_fault_enabled():
+                            self.update_filament_error_pos(eventtime)
+                            self.reactor.update_timer(self.extruder_pos_timer, self.reactor.NOW)
+                    else:
                         self.set_multiplier( self.multiplier_high )
                         if self.debug:
                             self.gcode.respond_info("Buffer Triggered State: Trailing, setting high")
-                    else:
-                        self.set_multiplier( self.multiplier_low )
-                        if self.debug:
-                            self.gcode.respond_info("Buffer Triggered State: Trailing, setting low")
-                    # Signal that no error was found
-                    if self.turtle_fault_enabled():
-                        self.update_filament_error_pos(eventtime)
+                        # Signal that no error was found
+                        if self.turtle_fault_enabled():
+                            self.update_filament_error_pos(eventtime)
+                            self.reactor.update_timer(self.extruder_pos_timer, self.reactor.NEVER)
+
 
         if state: self.last_state = TRAILING_STATE_NAME
         if not state: self.last_state = False
@@ -269,7 +271,11 @@ class AFCtrigger:
         if eventtime < self.min_event_systime or not self.enable:
             return
         if pause:
-            if not CUR_LANE.prep_state:
+            if self.last_state == ADVANCE_STATE_NAME:
+                msg += '\n CLOG DETECTED'
+            if self.last_state == TRAILING_STATE_NAME:
+                msg += '\n AFC NOT FEEDING'
+            elif not CUR_LANE.prep_state:
                 msg += '\nFilament runout'
             self.min_event_systime = self.reactor.NEVER
             self.AFC.AFC_error( msg, True )
@@ -281,50 +287,56 @@ class AFCtrigger:
                 # Check if printing and tool loaded
                 if self.is_printing and self.AFC.current != None:
                     if state:
-                        self.gcode.respond_info("Buffer Triggered State: Advanced\nPOSSIBLE CLOG")
+                        if self.debug:
+                            self.gcode.respond_info("Buffer Triggered State: Advanced\nWATCHING FOR CLOG")
                         self.set_multiplier( (self.multiplier_low + self.multiplier_low) / 5 )
                         if self.debug: self.gcode.respond_info("Buffer Triggered State: Advanced, setting Extra low")
-                        # Start clog watch timer
-                        if self.clog_sensitivity > 0:
-                            self.start_clog_timer( eventtime )
+                        # Start clog watch
+                        if self.turtle_fault_enabled():
+                            self.update_filament_error_pos(eventtime)
+                            self.reactor.update_timer(self.extruder_pos_timer, self.reactor.NOW)
                     else:
                         self.set_multiplier( self.multiplier_low )
-                        if self.debug: self.gcode.respond_info("Buffer Triggered State: Off Advanced, cancel clog timer")
+                        if self.debug: self.gcode.respond_info("Buffer Triggered State: Off Advanced, cancel clog watch")
                         # if state changed before timer expires, disable clog timer
-                        if self.clog_sensitivity > 0:
-                            self.cancel_clog_timer()
+                        if self.turtle_fault_enabled():
+                            self.update_filament_error_pos(eventtime)
+                            self.reactor.update_timer(self.extruder_pos_timer, self.reactor.NEVER)
 
         if state: self.last_state = ADVANCE_STATE_NAME
         if not state: self.last_state = False
 
-    # Clog Timer functions
-    def start_clog_timer(self, eventtime):
-        """Starts a timer for clog detection, invoking a callback after a set delay."""
-        if self.debug:
-            self.gcode.respond_info("Starting clog detection timer")
-        # Set a waketime for clog detection
-        waketime = self.reactor.monotonic() + self.clog_sensitivity
-        self.clog_timer = self.reactor.register_timer(self.clog_detect_callback, waketime)
+    cmd_SET_FAULT_SENSITIVITY_help = "Adjust Filament Fault sensitivity on the fly"
+    def cmd_SET_FAULT_SENSITIVITY(self, gcmd):
+        if self.turtleneck:
+            if self.AFC.current != None and self.enable:
+                sense_msg = ''
+                chg_sense = gcmd.get_float('SENSITIVITY')
+                if chg_sense != None:
+                    if chg_sense < 0:
+                        sense_msg += '<span class=warning--text>SENSITIVITY must be greater than 0</span>'
+                    elif chg_sense == 0:
+                        self.error_sensitivity = chg_sense
+                        sense_msg += '<span class=info--text>Filament fault detection disabled, sensitivity set to {}</span>'.format(chg_sense)
+                    else:
+                        self.error_sensitivity = chg_sense
+                        sense_msg += '<span class=info--text>Filament fault detection sensitivity set to {}</span>'.format(chg_sense)
+                    sense_msg += '\n<span class=info--text>filament_fault_sensitivity must be updated in config to save adjusted sensitivity</span>'
+                else:
+                    sense_msg += '<span class=warning--text>SENSITIVITY not provided</span>'
+                self.gcode.respond_raw(sense_msg)
 
-    def cancel_clog_timer(self):
-        """Cancels the clog detection timer."""
-        if self.clog_timer:
-            if self.debug:
-                self.gcode.respond_info("Cancelling clog detection timer")
-            self.reactor.unregister_timer(self.clog_timer)
-            self.clog_timer = None
-            return self.reactor.NEVER
-
-    def clog_detect_callback(self, eventtime):
-        """Callback function that runs when the clog detection timer expires."""
-        if self.debug:
-            self.gcode.respond_info("Clog detection timer expired: clog detected.")
-        # Report error back through AFC, will pause print if printing
-        if self.led:
-            self.AFC.afc_led(self.AFC.led_fault, self.led_index)
-        msg = "Clog detected! Taking necessary action."
-        self.pause_on_error(msg, True)
-        return self.reactor.NEVER
+    def cmd_SET_MULTILIER(self, gcmd):
+        if self.turtleneck:
+            if self.AFC.current != None and self.enable:
+                chg_multiplier = gcmd.get('MULTIPLIER', None)
+                if chg_multiplier == None:
+                    self.gcode.respond_info("Multiplier must be provided, HIGH or LOW")
+                    return
+                chg_factor = gcmd.get_float('FACTOR', 1.1)
+                if chg_factor <= 0:
+                    self.gcode.respond_info("FACTOR must be greater than 0")
+                    return
 
     def buffer_status(self):
         state_info = ''
@@ -406,7 +418,6 @@ class AFCtrigger:
                 if self.error_sensitivity > 0:
                     msg  = ''
                     msg += '<span class=info--text>Filament fault detection enabled\n'
-                    msg += 'Clog sensitivity: {} seconds\n'.format(self.clog_sensitivity)
                     msg += 'Fault sensitivty: {}mm</span>'.format(self.fault_sensitivity)
                     self.gcode.respond_raw( msg )
 

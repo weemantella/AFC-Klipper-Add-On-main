@@ -14,73 +14,82 @@ class afc:
         self.reactor = self.printer.get_reactor()
         self.printer.register_event_handler("klippy:connect",
                                             self.handle_connect)
-        self.gcode = self.printer.lookup_object('gcode')
+        self.gcode   = self.printer.lookup_object('gcode')
         self.VarFile = config.get('VarFile')
-        self.Type = config.get('Type')
-        self.buffer_name = config.get('Buffer_Name', None)
+        self.Type    = config.get('Type')
         self.current = None
         self.failure = False
-        self.lanes = {}
+        self.lanes   = {}
         # whether we failed during a tool change. used to determine if the restore position macro
         # should actually restore gcode state
         self.failed_in_toolchange = False
-        self.tool_start = None
+        self.tool_start           = None
 
         # SPOOLMAN
         self.spoolman = config.getboolean('spoolman', False)
         if self.spoolman:
             self.spoolman_filament={}
+
         #LED SETTINGS
-        self.ind_lights = None
-        self.led_name = config.get('led_name')
-        self.led_fault =config.get('led_fault','1,0,0,0')
-        self.led_ready = config.get('led_ready','1,1,1,1')
-        self.led_not_ready = config.get('led_not_ready','1,0,0,0')
-        self.led_loading = config.get('led_loading','1,1,0,0')
-        self.led_unloading = config.get('led_unloading','1,1,.5,0')
-        self.led_tool_loaded = config.get('led_tool_loaded','1,1,0,0')
+        self.ind_lights          = None
+        self.led_name            = config.get('led_name')
+        self.led_fault           = config.get('led_fault','1,0,0,0')
+        self.led_ready           = config.get('led_ready','1,1,1,1')
+        self.led_not_ready       = config.get('led_not_ready','1,0,0,0')
+        self.led_loading         = config.get('led_loading','1,1,0,0')
+        self.led_unloading       = config.get('led_unloading','1,1,.5,0')
+        self.led_tool_loaded     = config.get('led_tool_loaded','1,1,0,0')
+        self.led_advancing       = config.get('led_buffer_advancing','0,0,1,0')
+        self.led_trailing        = config.get('led_buffer_trailing','0,1,0,0')
+        self.led_buffer_disabled = config.get('led_buffer_disable', '0,0,0,0.25')
+
+        # BUFFER
+        # self.buffer_name = config.get('Buffer_Name', None)
+        # self.buffer = ''
+
         # HUB
         self.hub_move_dis = config.getfloat("hub_move_dis", 50)
         self.hub = ''
+        # self.hub_endstop = config.get('hub_endstop', None)
 
         # TOOL Cutting Settings
-        self.tool = ''
-        self.tool_cut = config.getboolean("tool_cut", False)
+        self.tool         = ''
+        self.tool_cut     = config.getboolean("tool_cut", False)
         self.tool_cut_cmd = config.get('tool_cut_cmd')
 
         # CHOICES
-        self.park = config.getboolean("park", False)
-        self.park_cmd = config.get('park_cmd', None)
-        self.kick = config.getboolean("kick", False)
-        self.kick_cmd = config.get('kick_cmd', None)
-        self.wipe = config.getboolean("wipe", False)
-        self.wipe_cmd = config.get('wipe_cmd', None)
-        self.poop = config.getboolean("poop", False)
-        self.poop_cmd = config.get('poop_cmd', None)
-        self.hub_cut = config.getboolean("hub_cut", False)
-        self.hub_cut_cmd = config.get('hub_cut_cmd', None)
+        self.park         = config.getboolean("park", False)
+        self.park_cmd     = config.get('park_cmd', None)
+        self.kick         = config.getboolean("kick", False)
+        self.kick_cmd     = config.get('kick_cmd', None)
+        self.wipe         = config.getboolean("wipe", False)
+        self.wipe_cmd     = config.get('wipe_cmd', None)
+        self.poop         = config.getboolean("poop", False)
+        self.poop_cmd     = config.get('poop_cmd', None)
+        self.hub_cut      = config.getboolean("hub_cut", False)
+        self.hub_cut_cmd  = config.get('hub_cut_cmd', None)
 
-        self.form_tip = config.getboolean("form_tip", False)
+        self.form_tip     = config.getboolean("form_tip", False)
         self.form_tip_cmd = config.get('form_tip_cmd', None)
 
-        self.tool_stn = config.getfloat("tool_stn", 120)
-        self.tool_stn_unload = config.getfloat("tool_stn_unload", self.tool_stn)
-        self.afc_bowden_length = config.getfloat("afc_bowden_length", 900)
+        self.tool_stn             = config.getfloat("tool_stn", 120)
+        self.tool_stn_unload      = config.getfloat("tool_stn_unload", self.tool_stn)
+        self.afc_bowden_length    = config.getfloat("afc_bowden_length", 900)
         self.config_bowden_length = self.afc_bowden_length
 
         # MOVE SETTINGS
         self.tool_sensor_after_extruder = config.getfloat("tool_sensor_after_extruder", 0)
-        self.long_moves_speed = config.getfloat("long_moves_speed", 100)
-        self.long_moves_accel = config.getfloat("long_moves_accel", 400)
-        self.short_moves_speed = config.getfloat("short_moves_speed", 25)
-        self.short_moves_accel = config.getfloat("short_moves_accel", 400)
+        self.long_moves_speed           = config.getfloat("long_moves_speed", 100)
+        self.long_moves_accel           = config.getfloat("long_moves_accel", 400)
+        self.short_moves_speed          = config.getfloat("short_moves_speed", 25)
+        self.short_moves_accel          = config.getfloat("short_moves_accel", 400)
         self.short_move = ' VELOCITY=' + str(self.short_moves_speed) + ' ACCEL='+ str(self.short_moves_accel)
-        self.long_move = ' VELOCITY=' + str(self.long_moves_speed) + ' ACCEL='+ str(self.long_moves_accel)
-        self.short_move_dis = config.getfloat("short_move_dis", 10)
-        self.tool_unload_speed =config.getfloat("tool_unload_speed", 10)
-        self.tool_load_speed =config.getfloat("tool_load_speed", 10)
+        self.long_move  = ' VELOCITY=' + str(self.long_moves_speed) + ' ACCEL='+ str(self.long_moves_accel)
+        self.short_move_dis    = config.getfloat("short_move_dis", 10)
+        self.tool_unload_speed = config.getfloat("tool_unload_speed", 10)
+        self.tool_load_speed   = config.getfloat("tool_load_speed", 10)
         self.tool_max_unload_attempts = config.getint('tool_max_unload_attempts', 2)
-        self.z_hop =config.getfloat("z_hop", 0)
+        self.z_hop = config.getfloat("z_hop", 0)
         self.gcode.register_command('HUB_LOAD', self.cmd_HUB_LOAD, desc=self.cmd_HUB_LOAD_help)
         if self.Type == 'Box_Turtle':
             self.gcode.register_command('LANE_UNLOAD', self.cmd_LANE_UNLOAD, desc=self.cmd_LANE_UNLOAD_help)
@@ -90,14 +99,34 @@ class afc:
         self.gcode.register_command('RESTORE_CHANGE_TOOL_POS', self.cmd_RESTORE_CHANGE_TOOL_POS, desc=self.cmd_RESTORE_CHANGE_TOOL_POS_help)
         self.gcode.register_command('PREP', self.cmd_PREP, desc=self.cmd_PREP_help)
         self.gcode.register_command('LANE_MOVE', self.cmd_LANE_MOVE, desc=self.cmd_LANE_MOVE_help)
+        self.gcode.register_command('LANE_HOME', self.cmd_LANE_HOME, desc=self.cmd_LANE_HOME_help)
         self.gcode.register_command('TEST', self.cmd_TEST, desc=self.cmd_TEST_help)
         self.gcode.register_command('HUB_CUT_TEST', self.cmd_HUB_CUT_TEST, desc=self.cmd_HUB_CUT_TEST_help)
         self.gcode.register_command('RESET_FAILURE', self.cmd_CLEAR_ERROR, desc=self.cmd_CLEAR_ERROR_help)
         self.gcode.register_mux_command('SET_BOWDEN_LENGTH', 'AFC', None, self.cmd_SET_BOWDEN_LENGTH, desc=self.cmd_SET_BOWDEN_LENGTH_help)
+        self.gcode.register_command('SET_SPOOL_ID', self.cmd_SET_SPOOL_ID, desc=self.cmd_SET_SPOOL_ID_help)
+        self.gcode.register_command('AFC_STATUS', self.cmd_AFC_STATUS, desc=self.cmd_AFC_STATUS_help)
         self.VarFile = config.get('VarFile')
         # Get debug and cast to boolean
         #self.debug = True == config.get('debug', 0)
         self.debug = False
+
+    cmd_SET_SPOOL_ID_help = "Set spool ID for a specific lane"
+    def cmd_SET_SPOOL_ID(self, gcmd):
+        lane = gcmd.get('LANE', None)
+        spool_id = gcmd.get('SPOOL_ID', None)
+        
+        if lane is None or spool_id is None:
+            self.gcode.respond_info("Error: Both LANE and SPOOL_ID must be provided")
+            return
+
+        try:
+            CUR_LANE = self.printer.lookup_object('AFC_stepper ' + lane)
+            self.lanes[CUR_LANE.unit][CUR_LANE.name]['spool_id'] = spool_id
+            self.save_vars()  # Persist the updated spool ID
+            self.gcode.respond_info(f"Spool ID {spool_id} set for lane {lane}")
+        except Exception as e:
+            self.gcode.respond_info(f"Error: Failed to set spool ID for lane {lane}: {str(e)}")
 
     cmd_SET_BOWDEN_LENGTH_help = "Set length of bowden, hub to toolhead"
     def cmd_SET_BOWDEN_LENGTH(self, gcmd):
@@ -124,6 +153,13 @@ class afc:
         distance = gcmd.get_float('DISTANCE', 0)
         CUR_LANE = self.printer.lookup_object('AFC_stepper ' + lane)
         CUR_LANE.move(distance, self.short_moves_speed, self.short_moves_accel)
+
+    cmd_LANE_HOME_help = "Lane Manual Movements"
+    def cmd_LANE_HOME(self, gcmd):
+        lane = gcmd.get('LANE', None)
+        distance = gcmd.get_float('DISTANCE', 0)
+        CUR_LANE = self.printer.lookup_object('AFC_stepper ' + lane)
+        CUR_LANE.move(distance, self.short_moves_speed, self.short_moves_accel, False, self.hub_endstop)
 
     cmd_CLEAR_ERROR_help = "CLEAR STATUS ERROR"
     def cmd_CLEAR_ERROR(self, gcmd):
@@ -217,6 +253,107 @@ class afc:
     def cmd_SPOOL_ID(self, gcmd):
         return
 
+    cmd_AFC_STATUS_help = "Return current status of AFC"
+    def cmd_AFC_STATUS(self, gcmd):
+        status_msg = ''
+
+        for UNIT in self.lanes.keys():
+            status_msg += '<span class=info--text>{} Status</span>'.format(UNIT)
+            status_msg += '\nLANE | Prep | Load | Hub | Tool |\n'
+
+            for LANE in self.lanes[UNIT].keys():
+                lane_msg = ''
+                CUR_LANE = self.printer.lookup_object('AFC_stepper ' + LANE)
+                # CUR_HUB = self.printer.lookup_object('AFC_hub '+ UNIT)
+                if self.current != None:
+                    if self.current == CUR_LANE.name:
+                        if not self.tool_start.filament_present or not self.hub.filament_present:
+                            lane_msg += '<span class=warning--text>{} </span>'.format(CUR_LANE.name.upper())
+                        else:
+                            lane_msg += '<span class=success--text>{} </span>'.format(CUR_LANE.name.upper())
+                    else:
+                        lane_msg += '{} '.format(CUR_LANE.name.upper())
+                else:
+                    lane_msg += '{} '.format(CUR_LANE.name.upper())
+
+                if CUR_LANE.prep_state == True:
+                    lane_msg += '| <span class=success--text><--></span> |'
+                else:
+                    lane_msg += '|  <span class=error--text>xx</span>  |'
+                if CUR_LANE.load_state == True:
+                    lane_msg += ' <span class=success--text><--></span> |'
+                else:
+                    lane_msg += '  <span class=error--text>xx</span>  |'
+
+                if self.current != None:
+                    if self.current == CUR_LANE.name:
+                        if self.hub.filament_present:
+                            lane_msg += ' <span class=success--text><-></span> |'
+                        else:
+                            lane_msg += '  <span class=error--text>xx</span>  |'
+                        if self.tool_start.filament_present:
+                            lane_msg += ' <span class=success--text><--></span> |\n'
+                        else:
+                            lane_msg += '  <span class=error--text>xx</span>  |\n'
+                    else:
+                        lane_msg += '  <span class=error--text>x</span>  |'
+                        lane_msg += '  <span class=error--text>xx</span>  |\n'
+                else:
+                    lane_msg += '  <span class=error--text>x</span>  |'
+                    lane_msg += '  <span class=error--text>xx</span>  |\n'
+                status_msg += lane_msg
+            self.buffer = self.printer.lookup_object('AFC_buffer {}'.format(CUR_LANE.buffer_name))
+            if self.buffer != None:
+                buffer_msg = ''
+                buffer_name = CUR_LANE.buffer_name.upper()
+                buffer_status = self.buffer.buffer_status()
+                buffer_msg += '<span class=info--text>{} {}</span>\n'.format(buffer_name.upper(), buffer_status)
+                if self.buffer.turtleneck == True:
+                    if buffer_status == 'Expanded':
+                        buffer_msg += '<span class=success--text>  _________\n'
+                        buffer_msg += '/-----------\</span>\n'
+                        buffer_msg += '<span class=success--text>|</span><span class=info--text>         |=========></span>\n'
+                        buffer_msg += '<span class=success--text>\-----------/\n'
+                        buffer_msg += '  ‾‾‾‾‾‾‾‾‾</span>\n'
+                    elif buffer_status == 'Compressed':
+                        buffer_msg += '<span class=success--text>  _________\n'
+                        buffer_msg += '/-----------\</span>\n'
+                        buffer_msg += '<span class=success--text>|</span><span class=info--text>|=========></span><span class=success--text>|</span>\n'
+                        buffer_msg += '<span class=success--text>\-----------/\n'
+                        buffer_msg += '  ‾‾‾‾‾‾‾‾‾</span>\n'
+                    elif buffer_status == 'buffer tube floating in the middle':
+                        buffer_msg += '<span class=success--text>  _________\n'
+                        buffer_msg += '/-----------\</span>\n'
+                        buffer_msg += '<span class=success--text>|</span><span class=info--text>    |=========></span>\n'
+                        buffer_msg += '<span class=success--text>\-----------/\n'
+                        buffer_msg += '  ‾‾‾‾‾‾‾‾‾</span>\n'
+                    else:
+                        buffer_msg += 'No status, something must be wrong :('
+
+                status_msg += buffer_msg
+
+        self.gcode.respond_raw(status_msg)
+
+        #         if self.current != None:
+        #             CUR_EXTRUDER = self.printer.lookup_object('AFC_extruder ' + CUR_LANE.extruder_name)
+        #             if self.current == CUR_LANE.name:
+        #                 if CUR_HUB.state == True:
+        #                     lane_msg += ' <span class=success--text><-></span> |'
+        #                 else:
+        #                     lane_msg += '  <span class=error--text>xx</span>  |'
+        #                 if CUR_EXTRUDER.tool_start_state == True:
+        #                     lane_msg += ' <span class=success--text><--></span> |\n'
+        #                 else:
+        #                     lane_msg += '  <span class=error--text>xx</span>  |\n'
+        #             else:
+        #                 lane_msg += '  <span class=error--text>x</span>  |'
+        #                 lane_msg += '  <span class=error--text>xx</span>  |\n'
+        #         else:
+        #             lane_msg += '  <span class=error--text>x</span>  |'
+        #             lane_msg += '  <span class=error--text>xx</span>  |\n'
+        #         status_msg += lane_msg
+        # self.gcode.respond_raw(status_msg)
+
     cmd_PREP_help = "Prep AFC"
     def cmd_PREP(self, gcmd):
         while self.printer.state_message != 'Printer is ready':
@@ -249,11 +386,13 @@ class afc:
                 del self.lanes[UNIT][erase]
         self.save_vars()
         if self.Type == 'Box_Turtle':
-            logo ='R  _____     ____\n'
-            logo+='E /      \  |  o | \n'
+            firstLeg = '<span class=warning--text>|</span><span class=error--text>_</span>'
+            secondLeg = firstLeg + '<span class=warning--text>|</span>'
+            logo ='<span class=success--text>R  _____     ____\n'
+            logo+='E /      \  |  </span><span class=info--text>o</span><span class=success--text> | \n'
             logo+='A |       |/ ___/ \n'
             logo+='D |_________/     \n'
-            logo+='Y |_|_| |_|_|\n'
+            logo+='Y {first}{second} {first}{second}\n'.format(first=firstLeg, second=secondLeg)
 
             logo_error ='E  _ _   _ _\n'
             logo_error+='R |_|_|_|_|_|\n'
@@ -284,8 +423,17 @@ class afc:
             except:
                 self.AFC_error(error_string.format("tool_start"), False)
                 return
-            #try: self.tool_end = self.printer.lookup_object('filament_switch_sensor tool_end').runout_helper
-            #except: self.tool_end = None
+            try: self.tool_end = self.printer.lookup_object('filament_switch_sensor tool_end').runout_helper
+            except: self.tool_end = None
+            if CUR_LANE.buffer_name != None:
+                CUR_LANE.buffer = self.printer.lookup_object('AFC_buffer ' + CUR_LANE.buffer_name)
+            # buffer_warning = "Warning: Buffer {} not found in hardware config file"
+            # if self.buffer_name is not None:
+            #     try: self.buffer = self.printer.lookup_object('AFC_buffer {}'.format(self.buffer_name))
+            #     except:
+            #         self.AFC_error(buffer_warning.format(self.buffer_name))
+            # else:
+            #     self.gcode.respond_info("Warning: No buffer defined in config file")
             check_success = False
             if self.current == None:
                 for UNIT in self.lanes.keys():
@@ -362,7 +510,11 @@ class afc:
                         CUR_LANE = self.printer.lookup_object('AFC_stepper ' + lane)
                         CUR_LANE.do_enable(True)
                         if self.current == CUR_LANE.name:
-                            if self.tool_start.filament_present == False and self.hub.filament_present == True:
+                            if not self.tool_start.filament_present and not self.hub.filament_present:
+                                if not CUR_LANE.load_state and not CUR_LANE.prep_state:
+                                    CUR_LANE.status = None
+                                    self.current = None
+                            elif not self.tool_start.filament_present and self.hub.filament_present:
                                 untool_attempts = 0
                                 while CUR_LANE.load_state == True:
                                     CUR_LANE.move( self.hub_move_dis * -1, self.short_moves_speed, self.short_moves_accel)
@@ -398,9 +550,9 @@ class afc:
                                 while CUR_LANE.load_state == False and num_tries < 20:
                                     CUR_LANE.move( self.hub_move_dis, self.short_moves_speed, self.short_moves_accel)
                                     num_tries += 1
-                                if num_tries > 20:
-                                	message = (' FAILED TO LOAD, CHECK FILAMENT AT TRIGGER\n||==>--||----||-----||\nTRG   LOAD   HUB   TOOL')
-                                	self.handle_lane_failure(CUR_LANE, message, False)
+                                    if num_tries > 20:
+                                        message = (' FAILED TO LOAD, CHECK FILAMENT AT TRIGGER\n||==>--||----||-----||\nTRG   LOAD   HUB   TOOL')
+                                        self.handle_lane_failure(CUR_LANE, message, False)
                             if CUR_LANE.prep_state == True and CUR_LANE.load_state == True:
                                 self.afc_led(self.led_ready, CUR_LANE.led_index)
                         if check_success == True:
@@ -429,13 +581,14 @@ class afc:
                         CUR_LANE.set_afc_prep_done()
 
         if check_success == True:
-            self.gcode.respond_info(logo)
-            if self.buffer_name != None:
-                self.buffer = self.printer.lookup_object('AFC_buffer {}'.format(self.buffer_name))
+            self.gcode.respond_raw(logo)
+            self.cmd_AFC_STATUS(gcmd)
+            if CUR_LANE.buffer != None:
                 if self.current != None:
-                    self.buffer.enable_buffer()
+                    CUR_LANE.buffer.enable_buffer()
         else:
             self.gcode.respond_info(logo_error)
+            self.cmd_AFC_STATUS(gcmd)
         # Call out if all lanes are clear but hub is not
         if self.hub.filament_present == True and self.tool_start.filament_present == False:
             msg = ('LANES READY, HUB NOT CLEAR\n||-----||----|x|-----||\nTRG   LOAD   HUB   TOOL')
@@ -537,8 +690,10 @@ class afc:
                 self.lanes[CUR_LANE.unit][CUR_LANE.name]['tool_loaded'] = True
 
                 self.current = CUR_LANE.name
-                if self.buffer_name != None:
-                    self.buffer.enable_buffer()
+                if CUR_LANE.buffer_name != None:
+                    CUR_LANE.buffer = self.printer.lookup_object('AFC_buffer ' + CUR_LANE.buffer_name)
+                if CUR_LANE.buffer != None:
+                    CUR_LANE.buffer.enable_buffer()
 
                 self.afc_led(self.led_tool_loaded, CUR_LANE.led_index)
                 if self.poop:
@@ -584,8 +739,10 @@ class afc:
         self.heater = extruder.get_heater() #Get extruder heater
         CUR_LANE.status = 'unloading'
 
-        if self.buffer_name != None:
-            self.buffer.disable_buffer()
+        if CUR_LANE.buffer_name != None:
+            CUR_LANE.buffer = self.printer.lookup_object('AFC_buffer ' + CUR_LANE.buffer_name)
+        if CUR_LANE.buffer != None:
+            CUR_LANE.buffer.disable_buffer()
 
         self.afc_led(self.led_unloading, CUR_LANE.led_index)
         CUR_LANE.extruder_stepper.sync_to_extruder(CUR_LANE.extruder_name)
@@ -691,6 +848,8 @@ class afc:
             self.gcode.run_script_from_command("RESTORE_GCODE_STATE NAME=_AFC_CHANGE_TOOL MOVE=1 MOVE_SPEED={}".format(self.tool_unload_speed))
 
     def get_status(self, eventtime):
+        try: CUR_LANE = self.printer.lookup_object('AFC_stepper ' + self.current)
+        except: CUR_LANE = None
         str = {}
         # Try to get hub filament sensor, if lookup fails default to None
         try: self.hub = self.printer.lookup_object('filament_switch_sensor hub').runout_helper
@@ -699,7 +858,7 @@ class afc:
         try: self.tool = self.printer.lookup_object('filament_switch_sensor tool').runout_helper
         except: self.tool = None
         # Try to get buffer, if lookup fails default to None
-        try: self.buffer = self.printer.lookup_object('AFC_buffer {}'.format(self.buffer_name))
+        try: self.buffer = self.printer.lookup_object('AFC_buffer {}'.format(CUR_LANE.buffer_name))
         except: self.buffer = None
         numoflanes = 0
         for UNIT in self.lanes.keys():
@@ -721,11 +880,7 @@ class afc:
         # Set status of filament sensors if they exist, false if sensors are not found
         str["system"]['tool_loaded'] = True == self.tool_start.filament_present if self.tool_start is not None else False
         str["system"]['hub_loaded']  = True == self.hub.filament_present  if self.hub is not None else False
-        str["system"]['buffer'] = ('{} : {}'.format(
-            self.buffer_name.upper(),
-            "compressed" if self.buffer.last_state == 1
-            else "expanded" if self.buffer.last_state == 0
-            else self.buffer.last_state) if self.buffer is not None else None)
+        str["system"]['buffer'] = ('{} : {}'.format(CUR_LANE.buffer_name.upper(),self.buffer.buffer_status()) if self.buffer is not None else None)
         str["system"]['num_units'] = len(self.lanes)
         str["system"]['num_lanes'] = numoflanes
         return str
