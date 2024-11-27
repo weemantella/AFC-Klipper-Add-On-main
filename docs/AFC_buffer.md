@@ -39,10 +39,10 @@ With the current implementation of `AFC_buffer` support for Belay is limited. Be
 
 ### Required AFC Configuration Options
 
-In `AFC.cfg`, `Buffer_Name` must be defined. The buffer name must match the defined buffer name in the AFC hardware configuration file.
+In `AFC_Hardware.cfg`, `buffer` must be defined. 
 
-Example:
-`Buffer_Name: TN`
+Example under `AFC_extruder`:
+`buffer: TN`
 
 ### Required AFC Hardware Configuration Options
 
@@ -118,13 +118,14 @@ accel: 1000
 
 ### QUERY BUFFER
 
-The `QUERY_BUFFER` command reports the current state of the buffer sensor and, if applicable, the rotation distance of the AFC stepper motor. 
+The `QUERY_BUFFER` command reports the current state of the buffer and, if applicable, the rotation distance of the AFC stepper motor. 
 
 Example usage:
 `QUERY_BUFFER BUFFER=Turtleneck`
 
-Example output:
-`Turtleneck: Expanded`
+Example outputs:
+`Turtleneck: Trailing` _buffer is moving from the Advance trigger to the Trailing_
+`Turtleneck: Advancing` _buffer is moving from the Trailing trigger to the Advance_ 
 
 ### SET_ROTATION_FACTOR
 _for TurtleNeck Style Buffers_
@@ -134,19 +135,11 @@ This command allows the adjustment of rotation distance of the current AFC stepp
 Example Usage:
 `SET_ROTATION_FACTOR FACTOR=1.1`
 
-## Filament Fault Detection
+### SET_BUFFER_MULTIPLIER
 _for TurtleNeck Style Buffers_
 
-### Config Addition
-
-```
-filament_error_sensitivity: 5 # Value 0-10, 0 disables 10 is the least sensitive
-```
-
-### Expected Performance
-
-As the buffer moves onto the Advance sensor, the AFC will quickly slow the feed of filament. As the buffer moves onto the Trailing sensor, the AFC will quickly feed more filament. If the buffer stays at either sensor longer than the sensitivity allows the print will pause. The Sensitivity relates to the distance traveled by the primary extruder, 1 being 10mm, 10 being 100mm.
-
-If the buffer stays expanded, a clog is likely. If the buffer stays compressed, an AFC feed issue is likely.
-
-__filament_error_ensitivity, high and low multipliers will need to be tuned for each setup__
+`SET_BUFFER_MULTIPLIER` used to live adjust the high and low multipliers for the buffer
+- To change `multiplier_high`: `SET_BUFFER_MULTIPLIER MULTIPLIER=HIGH FACTOR=1.2`
+- To change `multiplier_low`: `SET_BUFFER_MULTIPLIER MULTIPLIER=HIGH FACTOR=0.8`
+    
+__Buffer config section must be updated for values to be saved__
