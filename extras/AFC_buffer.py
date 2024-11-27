@@ -6,9 +6,8 @@
 
 from configparser import Error as error
 
-ADVANCE_STATE_NAME   = "Expanded"
-TRAILING_STATE_NAME  = "Compressed"
-CHECK_RUNOUT_TIMEOUT = .5
+ADVANCE_STATE_NAME = "Trailing"
+TRAILING_STATE_NAME = "Advancing"
 
 class AFCtrigger:
 
@@ -57,11 +56,12 @@ class AFCtrigger:
 
         # Pull config for Turtleneck style buffer (advance and training switches)
         if self.advance_pin is not None:
-            self.turtleneck       = True
-            self.advance_pin      = config.get('advance_pin')
-            self.trailing_pin     = config.get('trailing_pin')
-            self.multiplier_high  = config.getfloat("multiplier_high", default=1.1, minval=1.0)
-            self.multiplier_low   = config.getfloat("multiplier_low", default=0.9, minval=0.0, maxval=1.0)
+            self.turtleneck = True
+            self.advance_pin = config.get('advance_pin')
+            self.trailing_pin = config.get('trailing_pin')
+            self.multiplier_high = config.getfloat("multiplier_high", default=1.1, minval=1.0)
+            self.multiplier_low = config.getfloat("multiplier_low", default=0.9, minval=0.0, maxval=1.0)
+            self.velocity = config.getfloat('velocity', 0)
 
         # Pull config for Belay style buffer (single switch)
         elif self.buffer_distance is not None:
@@ -93,10 +93,7 @@ class AFCtrigger:
             self.buttons.register_buttons([self.advance_pin] , self.advance_callback)
             self.buttons.register_buttons([self.trailing_pin], self.trailing_callback)
             self.gcode.register_mux_command("SET_ROTATION_FACTOR", "AFC_trigger", None, self.cmd_SET_ROTATION_FACTOR, desc=self.cmd_LANE_ROT_FACTOR_help)
-
-    def turtle_fault_enabled(self):
-        """Checks if the turtleneck, fault detection. and enabled"""
-        return self.turtleneck and self.error_sensitivity > 0 and self.enable
+            self.gcode.register_mux_command("SET_BUFFER_MULTIPLIER", "AFC_trigger", None, self.cmd_SET_MULTIPLIER, desc=self.cmd_SET_MULTIPLIER_help)
 
     def _handle_ready(self):
         # set startup delay time
@@ -134,7 +131,8 @@ class AFCtrigger:
     def belay_sensor_callback(self, eventtime, state):
         if not self.last_state and state:
             if self.printer.state_message == 'Printer is ready' and self.enable:
-                if self.AFC.tool_start.filament_present:
+                cur_stepper = self.printer.lookup_object('AFC_stepper ' + self.AFC.current)
+                if cur_stepper.hub.tool_state:
                     if self.AFC.current != None:
                         self.belay_move_lane(state)
         self.last_state = state
@@ -156,7 +154,9 @@ class AFCtrigger:
         if self.turtleneck:
             self.enable = True
             multiplier = 1.0
-            if self.last_state == TRAILING_STATE_NAME:
+            if self.last_state == ADVANCE_STATE_NAME:
+                multiplier = self.multiplier_low
+            else:
                 multiplier = self.multiplier_high
             else:
                 multiplier = self.multiplier_low
@@ -189,10 +189,13 @@ class AFCtrigger:
 
         cur_stepper = self.printer.lookup_object('AFC_stepper ' + self.AFC.current)
         cur_stepper.update_rotation_distance( multiplier )
-        if self.led:
-            if multiplier > 1:
-                self.AFC.afc_led(self.AFC.led_trailing,  self.led_index)
-            elif multiplier < 1:
+        if multiplier > 1:
+            self.last_state = TRAILING_STATE_NAME
+            if self.led:
+                self.AFC.afc_led(self.AFC.led_trailing, self.led_index)
+        elif multiplier < 1:
+            self.last_state = ADVANCE_STATE_NAME
+            if self.led:
                 self.AFC.afc_led(self.AFC.led_advancing, self.led_index)
         if self.debug:
             stepper = cur_stepper.extruder_stepper.stepper
@@ -205,97 +208,31 @@ class AFCtrigger:
             self.gcode.respond_info("Buffer multipliers reset")
             self.gcode.respond_info("Rotation distance reset : {}".format(cur_stepper.extruder_stepper.stepper.get_rotation_distance()[0]))
 
-    # Filament error detection
-    def trailing_callback(self, eventtime, state):
+    def advance_callback(self, eventime, state):
         if self.printer.state_message == 'Printer is ready' and self.enable:
-            if self.AFC.tool_start.filament_present:
-                # Check if printing and tool loaded
-                if self.is_printing and self.AFC.current != None:
-                    if state:
-                        self.set_multiplier( self.multiplier_high )
-                        if self.debug:
-                            self.gcode.respond_info("Buffer Triggered State: Trailing, setting high")
-                    else:
-                        self.set_multiplier( self.multiplier_low )
-                        if self.debug:
-                            self.gcode.respond_info("Buffer Triggered State: Trailing, setting low")
-                    # Signal that no error was found
-                    if self.turtle_fault_enabled():
-                        self.update_filament_error_pos(eventtime)
+            CUR_LANE = self.printer.lookup_object('AFC_stepper ' + self.AFC.current)
+            CUR_EXTRUDER = self.printer.lookup_object('AFC_extruder ' + CUR_LANE.extruder_name)
+            if CUR_EXTRUDER.tool_start_state:
+                if self.AFC.current != None and state:
+                    CUR_LANE.assist(CUR_LANE.calculate_pwm_value(self.AFC.gcode_move.speed * (self.velocity / 10)))
+                    self.reactor.pause(self.reactor.monotonic() + 1)
+                    CUR_LANE.assist(0)
+                    self.set_multiplier( self.multiplier_low )
+                    if self.debug: self.gcode.respond_info("Buffer Triggered State: Advanced")
+        self.last_state = ADVANCE_STATE_NAME
 
-        if state: self.last_state = TRAILING_STATE_NAME
-        if not state: self.last_state = False
-
-    # get the position of the extruder for error reference
-    def get_extruder_pos(self, eventtime=None):
-        if eventtime is None:
-            eventtime = self.reactor.monotonic()
-        print_time = self.estimated_print_time(eventtime)
-        last_position = self.extruder.find_past_position(print_time)
-
-        if self.past_position is None or last_position > self.past_position:
-            self.past_position = last_position
-            if self.debug and last_position > 0: self.gcode.respond_info("Extruder last position: {}".format(last_position))
-            return last_position
-
-        else:
-            return self.past_position
-
-    # store error length
-    def update_filament_error_pos(self, eventtime=None):
-        if eventtime is None:
-            eventtime = self.reactor.monotonic()
-        self.filament_error_pos = (self.get_extruder_pos(eventtime) + self.fault_sensitivity)
-
-    # watch for filament errors
-    # if the extruder position is greater then the set error out length pause print
-    def extruder_pos_update_event(self, eventtime):
-        extruder_pos = self.get_extruder_pos(eventtime)
-        # Check for filament problems
-        if not self.printer_ready:
-            if self.debug: self.gcode.respond_info("Printer not yet ready exiting fault detection")
-            return self.reactor.NEVER
-
-        if extruder_pos != None:
-            msg = "AFC filament fault detected! Take necessary action."
-            self.pause_on_error(msg, extruder_pos > self.filament_error_pos)
-
-        return eventtime + CHECK_RUNOUT_TIMEOUT
-
-    # pause print through AFC_error, check before stops repeat events
-    def pause_on_error(self, msg, pause=False):
-        eventtime = self.reactor.monotonic()
-        CUR_LANE  = self.printer.lookup_object('AFC_stepper ' + self.AFC.current)
-        if eventtime < self.min_event_systime or not self.enable:
-            return
-        if pause:
-            if not CUR_LANE.prep_state:
-                msg += '\nFilament runout'
-            self.min_event_systime = self.reactor.NEVER
-            self.AFC.AFC_error( msg, True )
-
-    # Clog detection
-    def advance_callback(self, eventtime, state):
+    def trailing_callback(self, eventime, state):
         if self.printer.state_message == 'Printer is ready' and self.enable:
-            if self.AFC.tool_start.filament_present:
-                # Check if printing and tool loaded
-                if self.is_printing and self.AFC.current != None:
-                    if state:
-                        self.gcode.respond_info("Buffer Triggered State: Advanced\nPOSSIBLE CLOG")
-                        self.set_multiplier( (self.multiplier_low + self.multiplier_low) / 5 )
-                        if self.debug: self.gcode.respond_info("Buffer Triggered State: Advanced, setting Extra low")
-                        # Start clog watch timer
-                        if self.clog_sensitivity > 0:
-                            self.start_clog_timer( eventtime )
-                    else:
-                        self.set_multiplier( self.multiplier_low )
-                        if self.debug: self.gcode.respond_info("Buffer Triggered State: Off Advanced, cancel clog timer")
-                        # if state changed before timer expires, disable clog timer
-                        if self.clog_sensitivity > 0:
-                            self.cancel_clog_timer()
-
-        if state: self.last_state = ADVANCE_STATE_NAME
-        if not state: self.last_state = False
+            CUR_LANE = self.printer.lookup_object('AFC_stepper ' + self.AFC.current)
+            CUR_EXTRUDER = self.printer.lookup_object('AFC_extruder ' + CUR_LANE.extruder_name)
+            if CUR_EXTRUDER.tool_start_state:
+                if self.AFC.current != None and state:
+                    CUR_LANE.assist(CUR_LANE.calculate_pwm_value(self.AFC.gcode_move.speed * (self.velocity / 10)))
+                    self.reactor.pause(self.reactor.monotonic() + 1)
+                    CUR_LANE.assist(0)
+                    self.set_multiplier( self.multiplier_high )
+                    if self.debug: self.gcode.respond_info("Buffer Triggered State: Trailing")
+        self.last_state = TRAILING_STATE_NAME
 
     # Clog Timer functions
     def start_clog_timer(self, eventtime):
@@ -329,18 +266,38 @@ class AFCtrigger:
     def buffer_status(self):
         state_info = ''
         if self.turtleneck:
-            if self.last_state  == TRAILING_STATE_NAME:
-                state_info += "Compressed"
-            elif self.last_state == ADVANCE_STATE_NAME:
-                state_info = "Expanded"
-            else:
-                state_info += "buffer tube floating in the middle"
+            state_info = self.last_state
         else:
             if self.last_state:
                 state_info += "compressed"
             else:
                 state_info += "expanded"
         return state_info
+
+    cmd_SET_MULTIPLIER_help = "live adjust buffer high and low multiplier"
+    def cmd_SET_MULTIPLIER(self, gcmd):
+        if self.turtleneck:
+            if self.AFC.current != None and self.enable:
+                chg_multiplier = gcmd.get('MULTIPLIER', None)
+                if chg_multiplier == None:
+                    self.gcode.respond_info("Multiplier must be provided, HIGH or LOW")
+                    return
+                chg_factor = gcmd.get_float('FACTOR')
+                if chg_factor <= 0:
+                    self.gcode.respond_info("FACTOR must be greater than 0")
+                    return
+                if chg_multiplier == "HIGH" and chg_factor > 1:
+                    self.multiplier_high = chg_factor
+                    self.set_multiplier(chg_factor)
+                    self.gcode.respond_info("multiplier_high set to {}".format(chg_factor))
+                    self.gcode.respond_info('multiplier_high: {} MUST be updated under buffer config for value to be saved'.format(chg_factor))
+                elif chg_multiplier == "LOW" and chg_factor < 1:
+                    self.multiplier_low = chg_factor
+                    self.set_multiplier(chg_factor)
+                    self.gcode.respond_info("multiplier_low set to {}".format(chg_factor))
+                    self.gcode.respond_info('multiplier_low: {} MUST be updated under buffer config for value to be saved'.format(chg_factor))
+                else:
+                    self.gcode.respond_info('multiplier_high must be greater than 1, multiplier_low must be less than 1')
 
     cmd_LANE_ROT_FACTOR_help = "change rotation distance by factor specified"
     def cmd_SET_ROTATION_FACTOR(self, gcmd):

@@ -94,3 +94,86 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Changed buffer code to reflect buffer functionality and pin names
 - Moved stepper commands from AFC_buffer to AFC_stepper
 - Abstracted buffer status to be used in IP query and query buffer
+
+## [2024-11-03]
+
+### Added
+
+- Manually add the following section to your `AFC.cfg`
+```
+#--=================================================================================--#
+######### Pause/Resume ################################################################
+#--=================================================================================--#
+xy_resume: False               # Enable to have position return to previous x,y coords after tool change
+resume_speed: 0                # Speed of resume move. Leave 0 to use current printer speed
+resume_z_speed: 0              # Speed of resume move in Z. Leave 0 to use current printer speed
+```
+- Manually add the following to your `AFC_macros.cfg`
+```
+[gcode_macro BT_RESUME]
+description: Resume the print after an error
+gcode:
+    {% if not printer.pause_resume.is_paused %}
+        RESPOND MSG="Print is not paused. Resume ignored"
+    {% else %}
+        AFC_RESUME
+    {% endif %}
+```
+- If you encounter an error use the *BT_RESUME* macro to resume to the proper z height after the error is fixed.
+
+### Changed
+
+- Save/Restore position to use proper gcode location
+- It will restore the z position first before making an x,y move
+
+## [2024-11-16]
+
+### Added
+- New variable `cut_servo_name` for AFC_hub configuration to specify which servo to use
+- AFC_STATUS macro call, will print out what the current status is for each lane
+  
+  ex. 
+  ```
+  Turtle_1 Status
+  LANE | Prep | Load | Hub | Tool |
+  LEG1 |  xx  |  xx  |  x  |  xx  |
+  LEG2 |  xx  |  xx  |  x  |  xx  |
+  LEG3 |  xx  |  xx  |  x  |  xx  |
+  LEG4 |  xx  |  xx  |  x  |  xx  |
+  
+  Turtle_2 Status
+  LANE | Prep | Load | Hub | Tool |
+  LEG5 |  xx  |  xx  |  x  |  xx  |
+  LEG6 |  xx  |  xx  |  x  |  xx  |
+  LEG7 |  xx  |  xx  |  x  |  xx  |
+  LEG8 | <--> | <--> | <-> | <--> |
+  ```
+
+### Fixed
+- Fixed hub_cut function to work with new structure
+- Added sleeps back to hub_cut with reactor class
+
+## [2024-11-22]
+
+### Changed
+
+*Full update, this needs more details*
+
+## [2024-11-23]
+
+### Added
+- New buffer function `SET_BUFFER_MULTIPLIER` used to live adjust the high and low multipliers for the buffer
+    - To change `multiplier_high`: `SET_BUFFER_MULTIPLIER MULTIPLIER=HIGH FACTOR=1.2`
+    - To change `multiplier_low`: `SET_BUFFER_MULTIPLIER MULTIPLIER=HIGH FACTOR=0.8`
+    - `MULTIPLIER` and `FACTOR` must be defined
+    - Buffer config section must be updated for values to be saved
+
+### Fixed
+-Corrected buffer to only trigger when tube comes onto switch/sensor and not off
+
+## [2024-11-25]
+
+### Changed
+- Simplified buffer status to Trailing and Advancing
+  - Buffer tube moving from Trailing to Advance it is in the Advancing state
+  - Buffer tube moving from Advance to Trialing it is in the Trialing state

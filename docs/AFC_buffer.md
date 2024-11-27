@@ -39,10 +39,10 @@ With the current implementation of `AFC_buffer` support for Belay is limited. Be
 
 ### Required AFC Configuration Options
 
-In `AFC.cfg`, `Buffer_Name` must be defined. The buffer name must match the defined buffer name in the AFC hardware configuration file.
+In `AFC_Hardware.cfg`, `buffer` must be defined. 
 
-Example:
-`Buffer_Name: TN`
+Example under `AFC_extruder`:
+`buffer: TN`
 
 ### Required AFC Hardware Configuration Options
 
@@ -95,15 +95,17 @@ _Optional_
 [AFC_buffer TN]
 advance_pin:     # set advance pin
 trailing_pin:    # set trailing pin
-multiplier_high: 1.1   # default 1.1, factor to feed more filament
-multiplier_low:  0.9   # default 0.9, factor to feed less filament"
+multiplier_high: 1.05   # default 1.05, factor to feed more filament
+multiplier_low:  0.95   # default 0.95, factor to feed less filament
+velocity: 100
 
 [AFC_buffer TN2]
 advance_pin: !turtleneck:ADVANCE
 trailing_pin: !turtleneck:TRAILING
-multiplier_high: 1.1   # default 1.1, factor to feed more filament
-multiplier_low:  0.9   # default 0.9, factor to feed less filament
+multiplier_high: 1.05   # default 1.05, factor to feed more filament
+multiplier_low:  0.95   # default 0.95, factor to feed less filament
 led_index: Buffer_Indicator:1
+velocity: 100
 
 [AFC_buffer Belay]
 pin: mcu:BUFFER
@@ -116,13 +118,14 @@ accel: 1000
 
 ### QUERY BUFFER
 
-The `QUERY_BUFFER` command reports the current state of the buffer sensor and, if applicable, the rotation distance of the AFC stepper motor. 
+The `QUERY_BUFFER` command reports the current state of the buffer and, if applicable, the rotation distance of the AFC stepper motor. 
 
 Example usage:
 `QUERY_BUFFER BUFFER=Turtleneck`
 
-Example output:
-`Turtleneck: Expanded`
+Example outputs:
+`Turtleneck: Trailing` _buffer is moving from the Advance trigger to the Trailing_
+`Turtleneck: Advancing` _buffer is moving from the Trailing trigger to the Advance_ 
 
 ### SET_ROTATION_FACTOR
 _for TurtleNeck Style Buffers_
@@ -131,3 +134,12 @@ This command allows the adjustment of rotation distance of the current AFC stepp
 
 Example Usage:
 `SET_ROTATION_FACTOR FACTOR=1.1`
+
+### SET_BUFFER_MULTIPLIER
+_for TurtleNeck Style Buffers_
+
+`SET_BUFFER_MULTIPLIER` used to live adjust the high and low multipliers for the buffer
+- To change `multiplier_high`: `SET_BUFFER_MULTIPLIER MULTIPLIER=HIGH FACTOR=1.2`
+- To change `multiplier_low`: `SET_BUFFER_MULTIPLIER MULTIPLIER=HIGH FACTOR=0.8`
+    
+__Buffer config section must be updated for values to be saved__
