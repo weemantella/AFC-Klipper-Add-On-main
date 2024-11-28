@@ -229,8 +229,7 @@ class AFCtrigger:
                             self.update_filament_error_pos(eventtime)
                             self.reactor.update_timer(self.extruder_pos_timer, self.reactor.NEVER)
 
-        if state: self.last_state = ADVANCE_STATE_NAME
-        if not state: self.last_state = False
+        self.last_state = ADVANCE_STATE_NAME
 
     def trailing_callback(self, eventtime, state):
         if self.printer.state_message == 'Printer is ready' and self.enable:
@@ -258,8 +257,7 @@ class AFCtrigger:
                             self.update_filament_error_pos(eventtime)
                             self.reactor.update_timer(self.extruder_pos_timer, self.reactor.NEVER)
 
-        if state: self.last_state = TRAILING_STATE_NAME
-        if not state: self.last_state = False
+        self.last_state = TRAILING_STATE_NAME
 
     # get the position of the extruder for error reference
     def get_extruder_pos(self, eventtime=None):
@@ -316,7 +314,7 @@ class AFCtrigger:
     def buffer_status(self):
         state_info = ''
         if self.turtleneck:
-            self.last_state
+            state_info = self.last_state
         else:
             if self.last_state:
                 state_info += "compressed"
@@ -326,6 +324,23 @@ class AFCtrigger:
 
     cmd_SET_MULTIPLIER_help = "live adjust buffer high and low multiplier"
     def cmd_SET_MULTIPLIER(self, gcmd):
+        """
+        This function handles the adjustment of the buffer multipliers for the turtleneck buffer.
+        It retrieves the multiplier type ('HIGH' or 'LOW') and the factor to be applied. The function
+        ensures that the factor is valid and updates the corresponding multiplier.
+
+        Usage: SET_BUFFER_MULTIPLIER MULTIPLIER=<HIGH/LOW> FACTOR=<factor>
+        Example: SET_BUFFER_MULTIPLIER MULTIPLIER=HIGH FACTOR=1.2
+
+        Args:
+            gcmd: The G-code command object containing the parameters for the command.
+                  Expected parameters:
+                  - MULTIPLIER: The type of multiplier to be adjusted ('HIGH' or 'LOW').
+                  - FACTOR: The factor to be applied to the multiplier.
+
+        Returns:
+            None
+        """
         if self.turtleneck:
             if self.AFC.current != None and self.enable:
                 chg_multiplier = gcmd.get('MULTIPLIER', None)
@@ -355,6 +370,9 @@ class AFCtrigger:
         Adjusts the rotation distance of the current AFC stepper motor by applying a
         specified factor. If no factor is provided, it defaults to 1.0, which resets
         the rotation distance to the base value.
+
+        Usage: SET_ROTATION_FACTOR FACTOR=<factor>
+        Example: SET_ROTATION_FACTOR FACTOR=1.2
 
         Args:
             gcmd: A G-code command object containing the parameters for the factor.
@@ -392,6 +410,9 @@ class AFCtrigger:
         """
         Reports the current state of the buffer sensor and, if applicable, the rotation
         distance of the current AFC stepper motor.
+
+        Usage: QUERY_BUFFER BUFFER=<buffer_name>
+        Example: QUERY_BUFFER BUFFER=TN2
 
         Behavior:
             - If the `turtleneck` feature is enabled and a tool is loaded, the rotation

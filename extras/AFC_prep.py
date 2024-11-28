@@ -19,11 +19,38 @@ class afcPrep:
         self.gcode = self.printer.lookup_object('gcode')
         self.gcode.register_command('PREP', self.PREP, desc=None)
         self.enable = config.getboolean("enable", False)
+        self.delay = config.get('delay_time', .1, minval=0)
+
+        # Flag to set once resume rename as occured for the first time
+        self.rename_occured = False
+
+    def _rename_resume(self):
+        """
+            Helper function to check if renaming RESUME macro has occured and renames RESUME.
+            Addes a new RESUME macro that points to AFC resume function
+        """
+
+        # Checking to see if rename has already been done, don't want to rename again if prep was already ran
+        if not self.rename_occured:
+            self.rename_occured = True
+            # Renaming users Resume macro so that RESUME calls AFC_Resume function instead
+            base_resume_name = "RESUME"
+            prev_cmd = self.gcode.register_command(base_resume_name, None)
+            if prev_cmd is not None:
+                pdesc = "Renamed builtin of '%s'" % (base_resume_name,)
+                self.gcode.register_command(self.AFC.AFC_RENAME_RESUME_NAME, prev_cmd, desc=pdesc)
+            else:
+                self.gcode.respond_info("{}Existing command {} not found in gcode_macros{}".format("<span class=warning--text>", base_resume_name, "</span>",))
+
+            self.gcode.register_command(base_resume_name, self.AFC.cmd_AFC_RESUME, desc=self.AFC.cmd_AFC_RESUME_help)
 
     def PREP(self, gcmd):
         self.AFC = self.printer.lookup_object('AFC')
         while self.printer.state_message != 'Printer is ready':
             self.reactor.pause(self.reactor.monotonic() + 1)
+
+        self._rename_resume()
+
         ## load Unit variables
         if os.path.exists(self.AFC.VarFile + '.unit') and os.stat(self.AFC.VarFile + '.unit').st_size > 0:
             self.AFC.lanes=json.load(open(self.AFC.VarFile + '.unit'))
@@ -125,13 +152,11 @@ class afcPrep:
                         check_success = False
                         break
 
-                    if CUR_EXTRUDER.buffer_name !=None:
-                        CUR_EXTRUDER.buffer = self.printer.lookup_object('AFC_buffer ' + CUR_EXTRUDER.buffer_name)
                         # Run test reverse/forward on each lane
                     if check_success == True:
                         CUR_LANE.extruder_stepper.sync_to_extruder(None)
                         CUR_LANE.move( 5, self.AFC.short_moves_speed, self.AFC.short_moves_accel, True)
-                        self.reactor.pause(self.reactor.monotonic() + 1)
+                        self.reactor.pause(self.reactor.monotonic() + self.delay)
                         CUR_LANE.move( -5, self.AFC.short_moves_speed, self.AFC.short_moves_accel, True)
                     msg = ''
                     if CUR_LANE.prep_state == False:
@@ -162,7 +187,7 @@ class afcPrep:
                                     self.AFC.afc_led(self.AFC.led_tool_loaded, CUR_LANE.led_index)
                                     if len(self.AFC.extruders) == 1:
                                         self.AFC.current = CUR_LANE.name
-                                        CUR_EXTRUDER.buffer.enable_buffer()
+                                        CUR_EXTRUDER.enable_buffer()
                             else:
                                 lane_check=self.error_tool_unload(CUR_LANE)
                                 if lane_check != True:
@@ -188,6 +213,7 @@ class afcPrep:
                 self.gcode.respond_raw(logo)
             else:
                 self.gcode.respond_raw(logo_error)
+
     def error_tool_unload(self, CUR_LANE):
         self.gcode.respond_info('Error on filament trying to correct')
         while CUR_LANE.load_state == True:
