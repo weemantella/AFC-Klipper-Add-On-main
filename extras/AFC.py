@@ -575,33 +575,36 @@ class afc:
                         self.ERROR.handle_lane_failure(CUR_LANE, message)
                         return False
 
-            if self.failure == False:
-                CUR_LANE.extruder_stepper.sync_to_extruder(CUR_LANE.extruder_name)
-                CUR_LANE.status = 'Tooled'
-                pos = self.toolhead.get_position()
-                pos[3] += CUR_EXTRUDER.tool_stn
-                self.toolhead.manual_move(pos, CUR_EXTRUDER.tool_load_speed)
-                self.toolhead.wait_moves()
-                if CUR_EXTRUDER.tool_start == "buffer":
-                    CUR_LANE.extruder_stepper.sync_to_extruder(None)
-                    load_checks = 0
-                    while CUR_EXTRUDER.tool_start_state == True:
-                        CUR_LANE.extruder_stepper.sync_to_extruder(None)
-                        CUR_LANE.move( self.short_move_dis * -1, self.short_moves_speed, self.short_moves_accel )
-                        load_checks += 1
-                        self.reactor.pause(self.reactor.monotonic() + 0.1)
-                        if load_checks > self.tool_max_load_checks:
-                            msg = ''
-                            msg += "Buffer did not become compressed after {} short moves.\n".format(self.tool_max_load_checks)
-                            msg += "Tool may not be loaded"
-                            self.gcode.respond_info("<span class=warning--text>{}</span>".format(msg))
-                            break
-                    CUR_LANE.extruder_stepper.sync_to_extruder(CUR_LANE.extruder_name)
-                self.printer.lookup_object('AFC_stepper ' + CUR_LANE.name).status = 'tool'
-                self.lanes[CUR_LANE.unit][CUR_LANE.name]['tool_loaded'] = True
+            # Synchronize lane's extruder stepper and finalize tool loading.
+            CUR_LANE.extruder_stepper.sync_to_extruder(CUR_LANE.extruder_name)
+            CUR_LANE.status = 'Tooled'
 
-                self.current = CUR_LANE.name
-                CUR_EXTRUDER.enable_buffer()
+            # Adjust tool position for loading.
+            pos = self.toolhead.get_position()
+            pos[3] += CUR_EXTRUDER.tool_stn
+            self.toolhead.manual_move(pos, CUR_EXTRUDER.tool_load_speed)
+            self.toolhead.wait_moves()
+
+            # Update tool and lane status.
+            if CUR_EXTRUDER.tool_start == "buffer":
+                CUR_LANE.extruder_stepper.sync_to_extruder(None)
+                load_checks = 0
+                while CUR_EXTRUDER.tool_start_state == True:
+                    CUR_LANE.extruder_stepper.sync_to_extruder(None)
+                    CUR_LANE.move( self.short_move_dis * -1, self.short_moves_speed, self.short_moves_accel )
+                    load_checks += 1
+                    self.reactor.pause(self.reactor.monotonic() + 0.1)
+                    if load_checks > self.tool_max_load_checks:
+                        msg = ''
+                        msg += "Buffer did not become compressed after {} short moves.\n".format(self.tool_max_load_checks)
+                        msg += "Tool may not be loaded"
+                        self.gcode.respond_info("<span class=warning--text>{}</span>".format(msg))
+                        break
+                CUR_LANE.extruder_stepper.sync_to_extruder(CUR_LANE.extruder_name)
+            self.printer.lookup_object('AFC_stepper ' + CUR_LANE.name).status = 'tool'
+            self.lanes[CUR_LANE.unit][CUR_LANE.name]['tool_loaded'] = True
+            self.current = CUR_LANE.name
+            CUR_EXTRUDER.enable_buffer()
 
             # Activate the tool-loaded LED and handle filament operations if enabled.
             self.afc_led(self.led_tool_loaded, CUR_LANE.led_index)
@@ -755,18 +758,23 @@ class afc:
             while CUR_EXTRUDER.tool_start_state:
                 num_tries += 1
                 if num_tries > self.tool_max_unload_attempts:
-                    msg = ('FAILED TO UNLOAD {}. FILAMENT STUCK IN TOOLHEAD.\n||=====||====||====|x|\nTRG   LOAD   HUB   TOOL'.format(CUR_LANE.name.upper()))
-                    self.ERROR.fix(msg)  #send to error handling
-                    return
+                    # Handle failure if the filament cannot be unloaded.
+                    message = ('FAILED TO UNLOAD {}. FILAMENT STUCK IN TOOLHEAD.'.format(CUR_LANE.name.upper()))
+                    self.ERROR.handle_lane_failure(CUR_LANE, message)
+                    return False
                 pos = self.toolhead.get_position()
-                pos[3] += CUR_EXTRUDER.tool_stn_unload * -1
+                pos[3] -= CUR_EXTRUDER.tool_stn_unload
                 self.toolhead.manual_move(pos, CUR_EXTRUDER.tool_unload_speed)
                 self.toolhead.wait_moves()
-        if CUR_EXTRUDER.tool_sensor_after_extruder >0:
+
+        # Move filament past the sensor after the extruder, if applicable.
+        if CUR_EXTRUDER.tool_sensor_after_extruder > 0:
             pos = self.toolhead.get_position()
-            pos[3] += CUR_EXTRUDER.tool_sensor_after_extruder * -1
+            pos[3] -= CUR_EXTRUDER.tool_sensor_after_extruder
             self.toolhead.manual_move(pos, CUR_EXTRUDER.tool_unload_speed)
             self.toolhead.wait_moves()
+
+        # Synchronize and move filament out of the hub.
         CUR_LANE.extruder_stepper.sync_to_extruder(None)
         CUR_LANE.move(CUR_HUB.afc_bowden_length * -1, self.long_moves_speed, self.long_moves_accel, True)
 
