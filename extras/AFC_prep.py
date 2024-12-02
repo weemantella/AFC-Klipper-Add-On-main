@@ -19,7 +19,7 @@ class afcPrep:
         self.gcode = self.printer.lookup_object('gcode')
         self.gcode.register_command('PREP', self.PREP, desc=None)
         self.enable = config.getboolean("enable", False)
-        self.delay = config.get('delay_time', .1, minval=0)
+        self.delay = config.getfloat('delay_time', .1, minval=0)
 
         # Flag to set once resume rename as occured for the first time
         self.rename_occured = False
@@ -154,7 +154,7 @@ class afcPrep:
 
                         # Run test reverse/forward on each lane
                     if check_success == True:
-                        CUR_LANE.extruder_stepper.sync_to_extruder(None)
+                        CUR_LANE.sync_to_extruder(None)
                         CUR_LANE.move( 5, self.AFC.short_moves_speed, self.AFC.short_moves_accel, True)
                         self.reactor.pause(self.reactor.monotonic() + self.delay)
                         CUR_LANE.move( -5, self.AFC.short_moves_speed, self.AFC.short_moves_accel, True)
@@ -179,9 +179,9 @@ class afcPrep:
                         else:
                             msg +="<span class=error--text> NOT LOADED</span>"
                         if self.AFC.lanes[UNIT][CUR_LANE.name]['tool_loaded']:
-                            if CUR_EXTRUDER.tool_start_state == True:
+                            if CUR_EXTRUDER.tool_start_state == True or CUR_EXTRUDER.tool_start == "buffer":
                                 if CUR_LANE.prep_state == True and CUR_LANE.load_state == True:
-                                    CUR_LANE.extruder_stepper.sync_to_extruder(CUR_LANE.extruder_name)
+                                    CUR_LANE.sync_to_extruder(CUR_LANE.extruder_name)
                                     msg +="\n in ToolHead"
                                     self.AFC.set_active_spool(self.AFC.lanes[CUR_LANE.unit][CUR_LANE.name]['spool_id'])
                                     self.AFC.afc_led(self.AFC.led_tool_loaded, CUR_LANE.led_index)

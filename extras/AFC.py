@@ -81,7 +81,7 @@ class afc:
         self.short_moves_speed = config.getfloat("short_moves_speed", 25)
         self.short_moves_accel = config.getfloat("short_moves_accel", 400)
         self.short_move_dis = config.getfloat("short_move_dis", 10)
-        self.tool_max_unload_attempts = config.getint('tool_max_unload_attempts', 2)
+        self.tool_max_unload_attempts = config.getint('tool_max_unload_attempts', 4)
         self.z_hop =config.getfloat("z_hop", 0)
         self.xy_resume =config.getboolean("xy_resume", False)
         self.resume_speed =config.getfloat("resume_speed", 0)
@@ -612,8 +612,9 @@ class afc:
                         break
 
             if self.failure == False:
-                CUR_LANE.extruder_stepper.sync_to_extruder(CUR_LANE.extruder_name)
+                CUR_LANE.sync_to_extruder(CUR_LANE.extruder_name)
                 CUR_LANE.status = 'Tooled'
+                self.current = CUR_LANE.name
                 pos = self.toolhead.get_position()
                 pos[3] += CUR_EXTRUDER.tool_stn
                 self.toolhead.manual_move(pos, CUR_EXTRUDER.tool_load_speed)
@@ -621,7 +622,6 @@ class afc:
                 self.printer.lookup_object('AFC_stepper ' + CUR_LANE.name).status = 'tool'
                 self.lanes[CUR_LANE.unit][CUR_LANE.name]['tool_loaded'] = True
 
-                self.current = CUR_LANE.name
                 CUR_EXTRUDER.enable_buffer()
 
                 self.afc_led(self.led_tool_loaded, CUR_LANE.led_index)
@@ -695,6 +695,8 @@ class afc:
             return
         CUR_EXTRUDER = self.printer.lookup_object('AFC_extruder ' + CUR_LANE.extruder_name)
         CUR_HUB = self.printer.lookup_object('AFC_hub '+ CUR_LANE.unit)
+        CUR_EXTRUDER.disable_buffer()
+        CUR_LANE.sync_to_extruder(CUR_LANE.extruder_name)
         pos = self.toolhead.get_position()
         pos[3] -= 2
         self.toolhead.manual_move(pos, CUR_EXTRUDER.tool_unload_speed)
@@ -706,10 +708,7 @@ class afc:
         self.heater = extruder.get_heater() #Get extruder heater
         CUR_LANE.status = 'unloading'
 
-        CUR_EXTRUDER.disable_buffer()
-
         self.afc_led(self.led_unloading, CUR_LANE.led_index)
-        CUR_LANE.extruder_stepper.sync_to_extruder(CUR_LANE.extruder_name)
         extruder = self.printer.lookup_object('toolhead').get_extruder()
         pheaters = self.printer.lookup_object('heaters')
         wait = True
@@ -729,23 +728,42 @@ class afc:
             else:
                 self.gcode.run_script_from_command(self.form_tip_cmd)
         num_tries = 0
-        while CUR_EXTRUDER.tool_start_state:
-            num_tries += 1
-            if num_tries > self.tool_max_unload_attempts:
-                self.set_error_state(True)
-                msg = ('FAILED TO UNLOAD ' + CUR_LANE.name.upper() + '. FILAMENT STUCK IN TOOLHEAD.\n||=====||====||====|x|\nTRG   LOAD   HUB   TOOL')
-                self.AFC_error(msg)
-                return
+        if CUR_EXTRUDER.tool_start == "buffer":
+            while CUR_EXTRUDER.buffer_trailing == False:
+                # attempt to return buffer to trailng pin
+                CUR_LANE.sync_to_extruder(None)
+                CUR_LANE.move( self.short_move_dis * -1, self.short_moves_speed, self.short_moves_accel )
+                num_tries += 1
+                if num_tries > self.tool_max_unload_attempts:
+                    msg = ''
+                    msg += "Buffer did not become compressed after {} short moves.\n".format(self.tool_max_unload_attempts) 
+                    msg += "Increasing 'tool_max_unload_attempts' may improve loading reliablity"
+                    self.gcode.respond_info(msg)
+                    return
+            CUR_LANE.sync_to_extruder(CUR_LANE.extruder_name)
             pos = self.toolhead.get_position()
             pos[3] += CUR_EXTRUDER.tool_stn_unload * -1
             self.toolhead.manual_move(pos, CUR_EXTRUDER.tool_unload_speed)
             self.toolhead.wait_moves()
+        else:
+            while CUR_EXTRUDER.tool_start_state:
+                num_tries += 1
+                if num_tries > self.tool_max_unload_attempts:
+                    self.set_error_state(True)
+                    msg = ('FAILED TO UNLOAD ' + CUR_LANE.name.upper() + '. FILAMENT STUCK IN TOOLHEAD.\n||=====||====||====|x|\nTRG   LOAD   HUB   TOOL')
+                    self.AFC_error(msg, False)
+                    return
+                pos = self.toolhead.get_position()
+                pos[3] += CUR_EXTRUDER.tool_stn_unload * -1
+                self.toolhead.manual_move(pos, CUR_EXTRUDER.tool_unload_speed)
+                self.toolhead.wait_moves()
         if CUR_EXTRUDER.tool_sensor_after_extruder >0:
             pos = self.toolhead.get_position()
             pos[3] += CUR_EXTRUDER.tool_sensor_after_extruder * -1
             self.toolhead.manual_move(pos, CUR_EXTRUDER.tool_unload_speed)
             self.toolhead.wait_moves()
-        CUR_LANE.extruder_stepper.sync_to_extruder(None)
+
+        CUR_LANE.sync_to_extruder(None)
         CUR_LANE.move( CUR_HUB.afc_bowden_length * -1, self.long_moves_speed, self.long_moves_accel, True)
         num_tries = 0
         while CUR_HUB.state == True:

@@ -5,7 +5,7 @@
 # This file may be distributed under the terms of the GNU GPLv3 license.
 
 import math
-import chelper
+import chelper, stepper
 from kinematics import extruder
 from . import AFC_assist
 
@@ -50,9 +50,11 @@ class AFCExtruderStepper:
         self.printer = config.get_printer()
         self.name = config.get_name().split()[-1]
         self.reactor = self.printer.get_reactor()
-        self.extruder_stepper = extruder.ExtruderStepper(config)
+        self.extruder_stepper = stepper.PrinterStepper(config)
+        self.steppers = [self.extruder_stepper]
         self.extruder_name = config.get('extruder')
         self.gcode_cmd = config.get('cmd',None)
+        self.calc_position_from_coord = self.extruder_stepper.calc_position_from_coord
 
         self.motion_queue = None
         self.status = None
@@ -62,10 +64,13 @@ class AFCExtruderStepper:
         self.trapq = ffi_main.gc(ffi_lib.trapq_alloc(), ffi_lib.trapq_free)
         self.trapq_append = ffi_lib.trapq_append
         self.trapq_finalize_moves = ffi_lib.trapq_finalize_moves
-        self.stepper_kinematics = ffi_main.gc(
-            ffi_lib.cartesian_stepper_alloc(b'x'), ffi_lib.free)
-        self.assist_activate=False
+        self.extruder_stepper.setup_itersolve('cartesian_stepper_alloc', b'x')
+        self.assist_activate = False
         self.gcode = self.printer.lookup_object('gcode')
+
+        self.printer.register_event_handler("klippy:connect",
+                                            self._handle_connect)
+
         # Units
         unit = config.get('unit', None)
         if unit != None:
@@ -74,12 +79,24 @@ class AFCExtruderStepper:
         else:
             self.unit = 'Unknown'
             self.index = 0
-        self.hub= ''
+        self.hub = ''
         self.hub_dist = config.getfloat('hub_dist',20)
         self.dist_hub = config.getfloat('dist_hub', 60)
         # distance to retract filament from the hub
         self.park_dist = config.getfloat('park_dist', 10)
         self.led_index = config.get('led_index', None)
+        self.endstops  = []
+        self.endstop_map = {}
+        self.past_position = None
+        self.estimated_print_time = None
+
+        # look at next
+        # endstop = mcu.MCU_endstop(mcu, {'pin': HUB_PIN, 'pullup': True, 'invert': False})
+        # endstop.add_stepper(CUR_LANE.stepper)
+        # trigger_completion = endstop.home_start(print_time, sample_time, sample_count, rest_time, triggered=True)
+        # endstop.home_wait(home_end_time)
+
+
         # lane triggers
         buttons = self.printer.load_object(config, "buttons")
         self.prep = config.get('prep', None)
@@ -90,6 +107,7 @@ class AFCExtruderStepper:
         if self.load is not None:
             self.load_state = False
             buttons.register_buttons([self.load], self.load_callback)
+
         # Respoolers
         self.afc_motor_rwd = config.get('afc_motor_rwd', None)
         self.afc_motor_fwd = config.get('afc_motor_fwd', None)
@@ -106,16 +124,16 @@ class AFCExtruderStepper:
         self.AFC = self.printer.lookup_object('AFC')
         self.gcode = self.printer.lookup_object('gcode')
 
-        self.filament_diameter = config.getfloat("filament_diameter", 1.75)
-        self.filament_density = config.getfloat("filament_density", 1.24)
-        self.inner_diameter = config.getfloat("spool_inner_diameter", 100)  # Inner diameter in mm
-        self.outer_diameter = config.getfloat("spool_outer_diameter", 200)  # Outer diameter in mm
+        self.filament_diameter  = config.getfloat("filament_diameter", 1.75)
+        self.filament_density   = config.getfloat("filament_density", 1.24)
+        self.inner_diameter     = config.getfloat("spool_inner_diameter", 100)  # Inner diameter in mm
+        self.outer_diameter     = config.getfloat("spool_outer_diameter", 200)  # Outer diameter in mm
         self.empty_spool_weight = config.getfloat("empty_spool_weight", 190)  # Empty spool weight in g
-        self.remaining_weight = config.getfloat("spool_weight", 1000)  # Remaining spool weight in g
-        self.max_motor_rpm = config.getfloat("assist_max_motor_rpm", 500)  # Max motor RPM
-        self.rwd_speed_multi = config.getfloat("rwd_speed_multiplier", 0.5) # Multiplier to apply to rpm
-        self.fwd_speed_multi = config.getfloat("fwd_speed_multiplier", 0.5) # Multiplier to apply to rpm
-        self.diameter_range = self.outer_diameter - self.inner_diameter  # Range for effective diameter
+        self.remaining_weight   = config.getfloat("spool_weight", 1000)  # Remaining spool weight in g
+        self.max_motor_rpm      = config.getfloat("assist_max_motor_rpm", 500)  # Max motor RPM
+        self.rwd_speed_multi    = config.getfloat("rwd_speed_multiplier", 0.5) # Multiplier to apply to rpm
+        self.fwd_speed_multi    = config.getfloat("fwd_speed_multiplier", 0.5) # Multiplier to apply to rpm
+        self.diameter_range     = self.outer_diameter - self.inner_diameter  # Range for effective diameter
 
         # Set hub loading speed depending on distance between extruder and hub
         self.dist_hub_move_speed = self.AFC.long_moves_speed if self.dist_hub >= 200 else self.AFC.short_moves_speed
@@ -125,7 +143,30 @@ class AFCExtruderStepper:
         self._afc_prep_done = False
 
         # Get and save base rotation dist
-        self.base_rotation_dist = self.extruder_stepper.stepper.get_rotation_distance()[0]
+        self.base_rotation_dist = self.extruder_stepper.get_rotation_distance()[0]
+
+        # manual filament home
+        self.gcode.register_mux_command('MANUAL_FILAMENT_HOME', "LANE", self.name, self.cmd_MANUAL_FILAMENT_HOME, desc=self.cmd_MANUAL_FILAMENT_HOME_help)
+
+    def _handle_connect(self):
+        toolhead = self.printer.lookup_object('toolhead')
+        toolhead.register_step_generator(self.extruder_stepper.generate_steps)
+
+    def sync_to_extruder(self, extruder_name):
+        toolhead = self.printer.lookup_object('toolhead')
+        PrinterExtruder = self.printer.lookup_object('extruder')
+        toolhead.flush_step_generation()
+        if not extruder_name:
+            self.extruder_stepper.set_trapq(None)
+            self.motion_queue = None
+            return
+        extruder = self.printer.lookup_object(extruder_name, None)
+        # if extruder is None or not isinstance(extruder, PrinterExtruder):
+        #     raise self.printer.command_error("'%s' is not a valid extruder."
+        #                                      % (extruder_name,))
+        self.extruder_stepper.set_position([extruder.last_position, 0., 0.])
+        self.extruder_stepper.set_trapq(extruder.get_trapq())
+        self.motion_queue = extruder_name
 
     def assist(self, value, is_resend=False):
         if self.afc_motor_rwd is None:
@@ -160,6 +201,129 @@ class AFCExtruderStepper:
         toolhead.register_lookahead_callback(
             lambda print_time: assit_motor._set_pin(print_time, value))
 
+    def get_name(self):
+        return self.name
+
+    def get_extruder_pos(self, eventtime=None):
+        if eventtime is None:
+            eventtime = self.reactor.monotonic()
+        self.estimated_print_time = (self.printer.lookup_object('mcu').estimated_print_time)
+        print_time = self.estimated_print_time(eventtime)
+        last_position = self.extruder_stepper.get_past_mcu_position(print_time)
+
+        if self.past_position is None or last_position > self.past_position:
+            self.past_position = last_position
+            #if self.debug and last_position > 0: self.gcode.respond_info("Extruder last position: {}".format(last_position))
+            return last_position
+
+        else:
+            return self.past_position
+
+    def setup_endstop(self, pin, pin_name, stepper):
+        """
+        Configure and register an MCU endstop.
+
+        This method sets up an endstop by parsing the pin parameters, initializing 
+        the MCU endstop, and registering it in the endstop map and query system. 
+        It also links the provided stepper motor to the endstop for movement 
+        coordination.
+
+        Args:
+            pin (str): The pin identifier for the endstop.
+            pin_name (str): The name to associate with the endstop in the system.
+            stepper (Stepper): The stepper motor to be linked to the endstop.
+
+        Returns:
+            MCU_endstop: The configured MCU endstop object.
+        """
+        endstop_pin = pin
+        ppins = self.printer.lookup_object('pins')
+        pin_params = ppins.parse_pin(endstop_pin, True, True)
+        mcu_endstop = ppins.setup_pin('endstop', endstop_pin)
+        self.endstop_map[pin_name] = {'endstop': mcu_endstop,
+                                      'invert': pin_params['invert'],
+                                      'pullup': pin_params['pullup']}
+        name = pin_name
+        query_endstops = self.printer.load_object(self.config, 'query_endstops')
+        query_endstops.register_endstop(mcu_endstop, name)
+        mcu_endstop.add_stepper(stepper)
+        return (mcu_endstop, name)
+
+
+    # filament homing
+    # Use function to send a homing command to move filament to "endstop"
+    def do_homing_move(self, endstop, movepos, speed, accel, triggered, check_trigger):
+        self.homing_accel = accel
+        pos = [movepos, 0., 0., 0.]
+        phoming = self.printer.lookup_object('homing')
+        phoming.manual_home(self, endstop, pos, speed, triggered, check_trigger)
+
+    cmd_MANUAL_FILAMENT_HOME_help = "send filament from a lane to an 'endstop'"
+    def cmd_MANUAL_FILAMENT_HOME(self, gcmd):
+        """
+        Manually send filament from a specified lane to an endstop.
+
+        Args:
+            gcmd (object): The G-code command object containing parameters for the homing move.
+
+        Parameters:
+            - LANE (str): The name of the lane to send the filament from.
+            - BUFFER (str): The buffer name, used for filament advance if specified.
+            - SPEED (float): The speed of the move (default 50).
+            - ACCEL (float): The acceleration for the move (default 150).
+            - MOVE (float): The target position for the homing move (default 200).
+            - STOP (str): The type of endstop to home to ("HUB" or "TOOL").
+
+        Behavior:
+            - Looks up the lane and hub objects.
+            - Sends the filament to the specified endstop based on the provided parameters.
+
+        Example:
+            To send filament from lane 1 to the HUB endstop at 100mm with speed 60:
+
+            MANUAL_FILAMENT_HOME LANE=lane1 STOP=HUB SPEED=60 MOVE=100
+
+            To send filament from lane 2 to the TOOL endstop with acceleration 200:
+
+            MANUAL_FILAMENT_HOME LANE=lane2 BUFFER=TN2 STOP=TOOL ACCEL=200
+        """
+        lane        = gcmd.get('LANE', None)
+        buffer_name = gcmd.get('BUFFER', None)
+        speed       = gcmd.get_float('SPEED', 50, above=0.)
+        accel       = gcmd.get_float('ACCEL', 150, minval=0.)
+        movepos     = gcmd.get_float('MOVE', 200)
+        homing_move = 1
+        endstop     = gcmd.get('STOP',None)
+        endstops    = []
+
+        if lane != None:
+            CUR_LANE = self.printer.lookup_object('AFC_stepper ' + lane)
+            CUR_HUB = self.printer.lookup_object('AFC_hub '+ CUR_LANE.unit)
+            HUB_PIN = '{}'.format(CUR_HUB.switch_pin)
+        else: return
+
+        if buffer_name != None:
+            buffer = self.printer.lookup_object('AFC_buffer ' + buffer_name)
+            buffer_pin = '{}'.format(buffer.advance_pin)
+
+        # Establish endstops based on STOP selected
+        if endstop == "HUB":
+            stop = self.setup_endstop(HUB_PIN, CUR_LANE.unit, CUR_LANE.extruder_stepper)
+            endstops.append(stop)
+        elif endstop == "TOOL" and buffer_name != None:
+            stop = self.setup_endstop(buffer_pin, buffer_name, CUR_LANE.extruder_stepper)
+            endstops.append(stop)
+        else: return
+
+        if endstops != None:
+            self.do_enable(True)
+            starting_pos = self.get_extruder_pos()
+            self.do_homing_move(endstops, movepos, speed, accel, homing_move > 0, abs(homing_move) == 1)
+            ending_pos = self.get_extruder_pos()
+            dis_traveled = ending_pos - starting_pos
+            self.gcode_respond_info('Distance traveled when switch engagged: {}'.format(dis_traveled))
+
+
     def move(self, distance, speed, accel, assist_active=False):
         """
         Move the specified lane a given distance with specified speed and acceleration.
@@ -187,19 +351,19 @@ class AFCExtruderStepper:
 
         toolhead = self.printer.lookup_object('toolhead')
         toolhead.flush_step_generation()
-        prev_sk = self.extruder_stepper.stepper.set_stepper_kinematics(self.stepper_kinematics)
-        prev_trapq = self.extruder_stepper.stepper.set_trapq(self.trapq)
-        self.extruder_stepper.stepper.set_position((0., 0., 0.))
+        prev_sk = self.extruder_stepper.set_stepper_kinematics(self.extruder_stepper._stepper_kinematics)
+        prev_trapq = self.extruder_stepper.set_trapq(self.trapq)
+        self.extruder_stepper.set_position((0., 0., 0.))
         axis_r, accel_t, cruise_t, cruise_v = calc_move_time(distance, speed, accel)
         print_time = toolhead.get_last_move_time()
         self.trapq_append(self.trapq, print_time, accel_t, cruise_t, accel_t,
                           0., 0., 0., axis_r, 0., 0., 0., cruise_v, accel)
         print_time = print_time + accel_t + cruise_t + accel_t
-        self.extruder_stepper.stepper.generate_steps(print_time)
+        self.extruder_stepper.generate_steps(print_time)
         self.trapq_finalize_moves(self.trapq, print_time + 99999.9,
                                   print_time + 99999.9)
-        self.extruder_stepper.stepper.set_trapq(prev_trapq)
-        self.extruder_stepper.stepper.set_stepper_kinematics(prev_sk)
+        self.extruder_stepper.set_trapq(prev_trapq)
+        self.extruder_stepper.set_stepper_kinematics(prev_sk)
         toolhead.note_mcu_movequeue_activity(print_time)
         toolhead.dwell(accel_t + cruise_t + accel_t)
         toolhead.flush_step_generation()
@@ -243,6 +407,14 @@ class AFCExtruderStepper:
                 self.status = None
                 self.AFC.afc_led(self.AFC.led_not_ready, led)
 
+    def sync_print_time(self):
+        toolhead = self.printer.lookup_object('toolhead')
+        print_time = toolhead.get_last_move_time()
+        if self.next_cmd_time > print_time:
+            toolhead.dwell(self.next_cmd_time - print_time)
+        else:
+            self.next_cmd_time = print_time
+
     def do_enable(self, enable):
         self.sync_print_time()
         stepper_enable = self.printer.lookup_object('stepper_enable')
@@ -254,16 +426,8 @@ class AFCExtruderStepper:
             se.motor_disable(self.next_cmd_time)
         self.sync_print_time()
 
-    def sync_print_time(self):
-        toolhead = self.printer.lookup_object('toolhead')
-        print_time = toolhead.get_last_move_time()
-        if self.next_cmd_time > print_time:
-            toolhead.dwell(self.next_cmd_time - print_time)
-        else:
-            self.next_cmd_time = print_time
-
     def update_rotation_distance(self, multiplier):
-        self.extruder_stepper.stepper.set_rotation_distance( self.base_rotation_dist / multiplier )
+        self.extruder_stepper.set_rotation_distance( self.base_rotation_dist / multiplier )
 
     def calculate_effective_diameter(self, weight_g, spool_width_mm=60):
 
@@ -321,6 +485,27 @@ class AFCExtruderStepper:
 
         if self.remaining_weight < self.empty_spool_weight:
             self.remaining_weight = self.empty_spool_weight  # Ensure weight doesn't drop below empty spool weight
+
+    # wrappers to support homing
+    def flush_step_generation(self):
+        self.sync_print_time()
+    def get_position(self):
+        return [self.extruder_stepper.get_commanded_position(), 0., 0., 0.]
+    def set_position(self, newpos, homing_axes=()):
+        self.do_set_position(newpos[0])
+    def get_last_move_time(self):
+        self.sync_print_time()
+        return self.next_cmd_time
+    def dwell(self, delay):
+        self.next_cmd_time += max(0., delay)
+    def drip_move(self, newpos, speed, drip_completion):
+        self.do_move(newpos[0], speed, self.homing_accel)
+    def get_kinematics(self):
+        return self
+    def get_steppers(self):
+        return list(self.steppers)
+    def calc_position(self, stepper_positions):
+        return [stepper_positions[self.get_name()], 0., 0.]
 
 def load_config_prefix(config):
     return AFCExtruderStepper(config)
