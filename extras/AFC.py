@@ -16,6 +16,7 @@ class afc:
         self.SPOOL = self.printer.load_object(config,'AFC_spool')
         self.ERROR = self.printer.load_object(config,'AFC_error')
         self.IDLE = self.printer.load_object(config,'idle_timeout')
+        self.prompt = self.printer.load_object(config,'AFC_respond')
         self.gcode = self.printer.lookup_object('gcode')
 
         self.gcode_move = self.printer.load_object(config, 'gcode_move')
@@ -735,11 +736,11 @@ class afc:
             CUR_LANE.extruder_stepper.sync_to_extruder(CUR_LANE.extruder_name)
 
         # Check and set the extruder temperature if below the minimum.
-        wait = True
-        pheaters = self.printer.lookup_object('heaters')
-        if self.heater.target_temp <= self.heater.min_extrude_temp:
-            self.gcode.respond_info('Extruder below min_extrude_temp, heating to 5 degrees above min.')
-            pheaters.set_temperature(extruder.get_heater(), self.heater.min_extrude_temp + 5, wait)
+        if not self.heater.can_extrude:
+            pheaters = self.printer.lookup_object('heaters')
+            if self.heater.target_temp <= self.heater.min_extrude_temp:
+                self.gcode.respond_info('Extruder below min_extrude_temp, heating to 5 degrees above min.')
+                pheaters.set_temperature(extruder.get_heater(), self.heater.min_extrude_temp + 5, wait=True)
 
         # Enable the lane for unloading operations.
         CUR_LANE.do_enable(True)

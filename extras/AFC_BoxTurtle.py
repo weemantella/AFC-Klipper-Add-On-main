@@ -26,6 +26,8 @@ class afcBoxTurtle:
         self.logo_error+='R |          |\ <span class=secondary--text>X</span> |\n'
         self.logo_error+='! \_________/ |___|</span>\n'
 
+        self.AFC.gcode.register_command('CALL_CALIBRATION', self.CALL_CALIBRATION, None)
+        self.AFC.gcode.register_command('BOW_CALIBRATION', self.BOW_CALIBRATION, None)
         self.AFC.gcode.register_mux_command('CALIBRATE_AFC', None, None, self.cmd_CALIBRATE_AFC, desc=self.cmd_CALIBRATE_AFC_help)
 
     def system_Test(self, UNIT, LANE, delay):
@@ -96,6 +98,42 @@ class afcBoxTurtle:
 
         return succeeded
 
+    def CALL_CALIBRATION(self, gcmd):
+        buttons = []
+        title = 'BoxTurtle Calibration'
+        text = 'Select a lane to calibrate or elect to calibrate Bowden length'
+
+        for UNIT in self.AFC.lanes.keys():
+            for LANE in self.AFC.lanes[UNIT].keys():
+                # Create a button for each lane
+                button_label = "Calibrate {}".format(LANE)
+                button_command = "CALIBRATE_AFC LANES={}".format(LANE)
+                button_style = "primary"
+
+                buttons.append((button_label, button_command, button_style))
+
+        buttons.append(("all Lanes", "CALIBRATE_AFC LANES=all", "info"))
+        buttons.append(("afc_bowden_length", "BOW_CALIBRATION", "secondary"))
+
+        self.AFC.prompt.create_custom_p(title, text, buttons, True)
+
+    def BOW_CALIBRATION(self, gcmd):
+        buttons = []
+        title = 'Bowden Length Calibration'
+        text = 'Select lane to measure Bowden length with'
+        for UNIT in self.AFC.lanes.keys():
+            for LANE in self.AFC.lanes[UNIT].keys():
+                # Create a button for each lane
+                button_label = "Calibrate {}".format(LANE)
+                button_command = "CALIBRATE_AFC BOWDEN={}".format(LANE)
+                button_style = "secondary"
+
+                buttons.append((button_label, button_command, button_style))
+
+        back = [('Back', 'CALL_CALIBRATION', 'info')]
+
+        self.AFC.prompt.create_custom_p(title, text, buttons, True, back)
+
     cmd_CALIBRATE_AFC_help = 'calibrate the dist hub for lane and then afc_bowden_length'
     def cmd_CALIBRATE_AFC(self, gcmd):
         """
@@ -132,6 +170,22 @@ class afcBoxTurtle:
             return
 
         cal_msg = ''
+
+        def find_lane_to_calibrate(lane_name):
+            """
+            Search for the given lane across all units in the AFC system.
+
+            Args: lane_name: The name of the lane to search for
+
+            Returns: The lane name if found, otherwise None
+            """
+            for UNIT in self.AFC.lanes.keys():
+                if lane_name in self.AFC.lanes[UNIT]:
+                    return lane_name
+
+            # If the lane was not found
+            self.AFC.gcode.respond_info('{} not found in any unit.'.format(lane_name))
+            return None
 
         # Helper functions for movement and calibration
         def calibrate_hub(CUR_LANE, CUR_HUB):
@@ -192,18 +246,13 @@ class afcBoxTurtle:
             cal_msg += 'AFC Calibration distances +/-{}mm'.format(tol)
             cal_msg += '\n<span class=info--text>Update values in AFC_Hardware.cfg</span>'
             if lanes != 'all':
-                lane_to_calibrate = None
-                # Search for the lane within the units
-                for UNIT in self.AFC.lanes.keys():
-                    if lanes in self.AFC.lanes[UNIT]:
-                        lane_to_calibrate = lanes
-                        break
+                lane_to_calibrate = find_lane_to_calibrate(lanes)
+
                 if lane_to_calibrate is None:
-                    self.AFC.gcode.respond_info('{} not found in any unit.'.format(lanes))
                     return
 
                 # Calibrate the specific lane
-                checked, msg = calibrate_lane(lanes)
+                checked, msg = calibrate_lane(lane_to_calibrate)
                 if(not checked): return
                 cal_msg += msg
             else:
@@ -223,7 +272,13 @@ class afcBoxTurtle:
                 self.AFC.gcode.respond_info('Starting AFC distance Calibrations')
                 cal_msg += 'AFC Calibration distances +/-{}mm'.format(tol)
                 cal_msg += '\n<span class=info--text>Update values in AFC_Hardware.cfg</span>'
-            lane = afc_bl
+
+            lane_to_calibrate = find_lane_to_calibrate(afc_bl)
+
+            if lane_to_calibrate is None:
+                return
+
+            lane = lane_to_calibrate
             CUR_LANE = self.printer.lookup_object('AFC_stepper ' + lane)
             CUR_EXTRUDER = self.printer.lookup_object('AFC_extruder ' + CUR_LANE.extruder_name)
             CUR_HUB = self.printer.lookup_object('AFC_hub ' + CUR_LANE.unit)
