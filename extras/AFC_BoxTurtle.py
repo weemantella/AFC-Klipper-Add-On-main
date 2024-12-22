@@ -112,10 +112,17 @@ class afcBoxTurtle:
 
                 buttons.append((button_label, button_command, button_style))
 
-        buttons.append(("all Lanes", "CALIBRATE_AFC LANES=all", "info"))
+        buttons.append(("Calibrate all Lanes", "CALIBRATE_AFC LANES=all", "info"))
         buttons.append(("afc_bowden_length", "BOW_CALIBRATION", "secondary"))
 
         self.AFC.prompt.create_custom_p(title, text, buttons, True)
+
+    def calibration_handler(self, text, command):
+        # Handle cases where there are additional actions that need to be taken during calibration
+        title = 'Calibration'
+        button = [("Continue", "{}".format(command), "info")]
+
+        self.AFC.prompt.create_custom_p(title, text, button, True)
 
     def BOW_CALIBRATION(self, gcmd):
         buttons = []
@@ -124,7 +131,7 @@ class afcBoxTurtle:
         for UNIT in self.AFC.lanes.keys():
             for LANE in self.AFC.lanes[UNIT].keys():
                 # Create a button for each lane
-                button_label = "Calibrate {}".format(LANE)
+                button_label = "{}".format(LANE)
                 button_command = "CALIBRATE_AFC BOWDEN={}".format(LANE)
                 button_style = "secondary"
 
@@ -282,7 +289,15 @@ class afcBoxTurtle:
             CUR_LANE = self.printer.lookup_object('AFC_stepper ' + lane)
             CUR_EXTRUDER = self.printer.lookup_object('AFC_extruder ' + CUR_LANE.extruder_name)
             CUR_HUB = self.printer.lookup_object('AFC_hub ' + CUR_LANE.unit)
+            CUR_BUFFER = CUR_EXTRUDER.buffer
             self.AFC.gcode.respond_info('Calibrating Bowden Length with {}'.format(CUR_LANE.name.upper()))
+
+            # Check if the buffer in compressed
+            if CUR_BUFFER.turtleneck:
+                if CUR_BUFFER.buffer_status != 'Advancing':
+                    msg = 'Fully Compress Buffer: {} before calibrating Bowden length'.format(CUR_BUFFER.name.upper())
+                    self.calibration_handler(msg, 'BOW_CALIBRATION')
+                    return
 
             move_until_state(CUR_LANE, lambda: CUR_HUB.state, CUR_HUB.move_dis, tol, short_dis)
 
@@ -297,8 +312,8 @@ class afcBoxTurtle:
                 calibrate_hub(CUR_LANE, CUR_HUB)
                 if CUR_HUB.state:
                     CUR_LANE.move(CUR_HUB.move_dis * -1, self.AFC.short_moves_speed, self.AFC.short_moves_accel, True)
-                if CUR_EXTRUDER.tool_start == 'buffer':
-                    cal_msg += '\n afc_bowden_length: {}'.format(bow_pos - (short_dis * 2))
+                if CUR_EXTRUDER.tool_start == 'buffer' or CUR_BUFFER.buffer_status == 'Trailing':
+                    cal_msg += '\n afc_bowden_length: {}'.format(bow_pos - (short_dis * 3))
                 else:
                     cal_msg += '\n afc_bowden_length: {}'.format(bow_pos - short_dis)
                 CUR_LANE.do_enable(False)
