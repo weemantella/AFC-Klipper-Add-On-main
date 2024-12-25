@@ -29,6 +29,8 @@ class afc:
         self.stepper = {}
         self.tool_cmds={}
         self.afc_monitoring = False
+        self.number_of_toolchanges  = 0
+        self.current_toolchange     = 0
 
         self.desired_order_list = config.get('Vdesired_order_list','')
 
@@ -148,6 +150,7 @@ class afc:
         self.gcode.register_command('HUB_CUT_TEST', self.cmd_HUB_CUT_TEST, desc=self.cmd_HUB_CUT_TEST_help)
         self.gcode.register_mux_command('SET_BOWDEN_LENGTH', 'AFC', None, self.cmd_SET_BOWDEN_LENGTH, desc=self.cmd_SET_BOWDEN_LENGTH_help)
         self.gcode.register_command('AFC_STATUS', self.cmd_AFC_STATUS, desc=self.cmd_AFC_STATUS_help)
+        self.gcode.register_command('SET_AFC_TOOLCHANGES', self.cmd_SET_AFC_TOOLCHANGES)
 
     def print_version(self):
         import subprocess
@@ -156,6 +159,12 @@ class afc:
         git_hash = subprocess.check_output(['git', '-C', '{}'.format(afc_dir), 'rev-parse', '--short', 'HEAD']).decode('ascii').strip()
         git_commit_num = subprocess.check_output(['git', '-C', '{}'.format(afc_dir), 'rev-list', 'HEAD', '--count']).decode('ascii').strip()
         self.gcode.respond_info("AFC Version: v{}-{}-{}".format(AFC_VERSION, git_commit_num, git_hash))
+
+    def cmd_SET_AFC_TOOLCHANGES(self, gcmd):
+        self.number_of_toolchanges  = gcmd.get_int("TOOLCHANGES")
+        self.current_toolchange     = 1 # Reset back to one
+        if self.number_of_toolchanges > 0: 
+            self.gcode.respond_info("Total number of toolchanges set to {}".format(self.number_of_toolchanges))
 
     cmd_AFC_STATUS_help = "Return current status of AFC"
     def cmd_AFC_STATUS(self, gcmd):
@@ -933,7 +942,7 @@ class afc:
             self.ERROR.AFC_error("Please home printer before doing a tool change", False)
             return
 
-        tmp = gcmd.get_commandline()
+        tmp = gcmd.get_commandline().split()[0]
         cmd = tmp.upper()
         Tcmd = ''
         if 'LANE' in cmd:
@@ -976,6 +985,8 @@ class afc:
             if CUR_LANE._afc_prep_done:
                 # Log the tool change operation for debugging or informational purposes.
                 self.gcode.respond_info("Tool Change - {} -> {}".format(self.current, lane))
+                if self.number_of_toolchanges != 0 and self.current_toolchange != self.number_of_toolchanges:
+                    self.gcode.respond_raw("//      Change {} out of {}".format(self.current_toolchange, self.number_of_toolchanges))
 
                 # If a current lane is loaded, unload it first.
                 if self.current is not None:
@@ -999,6 +1010,7 @@ class afc:
                 self.gcode.respond_info("{} is now loaded in toolhead".format(lane))
                 self.restore_pos()
                 self.in_toolchange = False
+                self.current_toolchange += 1
         else:
             self.gcode.respond_info("{} already loaded".format(lane))
 
