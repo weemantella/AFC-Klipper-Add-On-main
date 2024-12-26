@@ -1,10 +1,13 @@
 
 from configparser import Error as error
+from extras.AFC import add_filament_switch
 
 class afc_hub:
     def __init__(self, config):
         self.printer = config.get_printer()
         self.printer.register_event_handler("klippy:connect", self.handle_connect)
+        self.gcode = self.printer.lookup_object('gcode')
+        self.AFC = self.printer.lookup_object("AFC")
 
         self.name = config.get_name().split()[-1]
         self.type = config.get('type', None)
@@ -37,6 +40,12 @@ class afc_hub:
             self.state = False
             buttons.register_buttons([self.switch_pin], self.switch_pin_callback)
 
+        self.enable_sensors_in_gui = config.getboolean("enable_sensors_in_gui", self.AFC.enable_sensors_in_gui)
+
+        if self.enable_sensors_in_gui:
+            self.filament_switch_name = "filament_switch_sensor {}_Hub".format(self.name)
+            self.fila = add_filament_switch(self.filament_switch_name, self.switch_pin, self.printer )
+
     def handle_connect(self):
         """
         Handle the connection event.
@@ -46,7 +55,6 @@ class afc_hub:
         self.AFC = self.printer.lookup_object('AFC')
         self.gcode = self.AFC.gcode
         self.reactor = self.AFC.reactor
-
 
     def switch_pin_callback(self, eventtime, state):
         self.state = state
