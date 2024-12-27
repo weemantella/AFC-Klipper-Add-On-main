@@ -84,6 +84,10 @@ class AFCextruder:
         self.AFC = self.printer.lookup_object('AFC')
         self.reactor = self.AFC.reactor
 
+        # Restores prev state
+        if self.name in self.AFC.extruders_f:
+            self.lane_loaded = self.AFC.extruders_f[self.name]['lane_loaded']
+        self.AFC.extruders[self.name] = self
         self.get_buffer()
 
     def get_buffer(self):

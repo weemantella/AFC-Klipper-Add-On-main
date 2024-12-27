@@ -10,7 +10,7 @@ class afcBoxTurtle(afcUnit):
         This function is called when the printer connects. It looks up AFC info
         and assigns it to the instance variable `self.AFC`.
         """
-        self.AFC = self.printer.lookup_object('AFC')
+        super().handle_connect()
 
         firstLeg = '<span class=warning--text>|</span><span class=error--text>_</span>'
         secondLeg = firstLeg + '<span class=warning--text>|</span>'
@@ -27,7 +27,7 @@ class afcBoxTurtle(afcUnit):
         self.logo_error+='R |          |\ <span class=secondary--text>X</span> |\n'
         self.logo_error+='! \_________/ |___|</span>\n'
 
-        self.AFC.gcode.register_mux_command('CALIBRATE_AFC', None, None, self.cmd_CALIBRATE_AFC, desc=self.cmd_CALIBRATE_AFC_help)
+        self.AFC.gcode.register_mux_command('CALIBRATE_AFC', "UNIT", self.name, self.cmd_CALIBRATE_AFC, desc=self.cmd_CALIBRATE_AFC_help)
 
     cmd_CALIBRATE_AFC_help = 'calibrate the dist hub for lane and then afc_bowden_length'
     def cmd_CALIBRATE_AFC(self, gcmd):
@@ -201,5 +201,5 @@ class afcBoxTurtle(afcUnit):
         self.AFC.save_vars()
         self.AFC.gcode.respond_info(cal_msg)
 
-def load_config(config):
+def load_config_prefix(config):
     return afcBoxTurtle(config)

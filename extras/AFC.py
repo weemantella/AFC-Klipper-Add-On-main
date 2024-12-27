@@ -6,6 +6,7 @@
 
 
 import json
+import os
 from configparser import Error as error
 
 AFC_VERSION="1.0.0"
@@ -109,6 +110,8 @@ class afc:
         #self.debug = True == config.get('debug', 0)
         self.debug = False
 
+        self._load_last_state()
+
         # Printing here will not display in console but it will go to klippy.log
         self.print_version()
 
@@ -130,6 +133,14 @@ class afc:
                 else : self.gcode.respond_info("TRSYNC_SINGLE_MCU_TIMEOUT does not exist in mcu file, not updating")
             except Exception as e:
                 self.gcode.respond_info("Unable to update TRSYNC_TIMEOUT: {}".format(e))
+
+    def _load_last_state(self):
+        ## load Unit variables
+        if os.path.exists(self.VarFile + '.unit') and os.stat(self.VarFile + '.unit').st_size > 0:
+            self.units_f=json.load(open(self.VarFile + '.unit'))
+        ## load Toolhead variables
+        if os.path.exists(self.VarFile + '.tool') and os.stat(self.VarFile + '.tool').st_size > 0:
+            self.extruders_f=json.load(open(self.VarFile + '.tool'))
 
     def handle_connect(self):
         """
@@ -1050,7 +1061,7 @@ class afc:
             except error:
                 screen_mac = 'None'
             str[UNIT]={}
-            for NAME in self.units[UNIT].keys():
+            for NAME in self.units[UNIT].lanes.keys():
                 CUR_LANE=self.stepper[NAME]
                 str[UNIT][NAME]={}
                 str[UNIT][NAME]['LANE'] = CUR_LANE.index
@@ -1070,7 +1081,7 @@ class afc:
                 str[UNIT][NAME]['status'] = CUR_LANE.status if CUR_LANE.status is not None else ''
                 numoflanes +=1
             str[UNIT]['system']={}
-            str[UNIT]['system']['type'] = self.printer.lookup_object('AFC_hub '+ UNIT).type
+            str[UNIT]['system']['type'] = self.printer.lookup_object('AFC_hub '+ UNIT).unit.name
             str[UNIT]['system']['hub_loaded']  = True == self.printer.lookup_object('AFC_hub '+ UNIT).state
             str[UNIT]['system']['can_cut']  = True == self.printer.lookup_object('AFC_hub '+ UNIT).cut
             str[UNIT]['system']['screen'] = screen_mac
@@ -1082,23 +1093,23 @@ class afc:
         str["system"]['num_extruders'] = len(self.extruders)
         str["system"]["extruders"]={}
 
-        for EXTRUDE in self.extruders.keys():
-            str["system"]["extruders"][EXTRUDE]={}
-            CUR_EXTRUDER = self.printer.lookup_object('AFC_extruder ' + EXTRUDE)
-            str["system"]["extruders"][EXTRUDE]['lane_loaded'] = CUR_EXTRUDER.lane_loaded
+        for key, CUR_EXTRUDER in self.extruders.items():
+            str["system"]["extruders"][key]={}
+            # CUR_EXTRUDER = self.printer.lookup_object('AFC_extruder ' + EXTRUDE)
+            str["system"]["extruders"][key]['lane_loaded'] = CUR_EXTRUDER.lane_loaded
             if CUR_EXTRUDER.tool_start == "buffer":
                 if CUR_EXTRUDER.lane_loaded == '':
-                    str ["system"]["extruders"][EXTRUDE]['tool_start_sensor'] = False
+                    str ["system"]["extruders"][key]['tool_start_sensor'] = False
                 else:
-                    str["system"]["extruders"][EXTRUDE]['tool_start_sensor'] = True
+                    str["system"]["extruders"][key]['tool_start_sensor'] = True
             else:
-                str["system"]["extruders"][EXTRUDE]['tool_start_sensor'] = True == CUR_EXTRUDER.tool_start_state if CUR_EXTRUDER.tool_start is not None else False
+                str["system"]["extruders"][key]['tool_start_sensor'] = True == CUR_EXTRUDER.tool_start_state if CUR_EXTRUDER.tool_start is not None else False
             if CUR_EXTRUDER.tool_end is not None:
-                str["system"]["extruders"][EXTRUDE]['tool_end_sensor']   = True == CUR_EXTRUDER.tool_end_state
+                str["system"]["extruders"][key]['tool_end_sensor']   = True == CUR_EXTRUDER.tool_end_state
             else:
-                str["system"]["extruders"][EXTRUDE]['tool_end_sensor']   = None
-            str["system"]["extruders"][EXTRUDE]['buffer']   = CUR_EXTRUDER.buffer_name
-            str["system"]["extruders"][EXTRUDE]['buffer_status']   = CUR_EXTRUDER.buffer_status()
+                str["system"]["extruders"][key]['tool_end_sensor']   = None
+            str["system"]["extruders"][key]['buffer']   = CUR_EXTRUDER.buffer_name
+            str["system"]["extruders"][key]['buffer_status']   = CUR_EXTRUDER.buffer_status()
         return str
 
     def is_homed(self):

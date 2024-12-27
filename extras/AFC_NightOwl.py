@@ -10,7 +10,7 @@ class afcNightOwl(afcUnit):
         This function is called when the printer connects. It looks up AFC info
         and assigns it to the instance variable `self.AFC`.
         """
-        self.AFC = self.printer.lookup_object('AFC')
+        super().handle_connect()
 
         self.logo = '<span class=success--text>Night Owl Ready</span>'
         self.logo ='<span class=success--text>R  ,     ,\n'
@@ -22,5 +22,5 @@ class afcNightOwl(afcUnit):
 
         self.logo_error = '<span class=error--text>Night Owl Not Ready</span>\n'
 
-def load_config(config):
+def load_config_prefix(config):
     return afcNightOwl(config)

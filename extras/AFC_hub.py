@@ -10,12 +10,17 @@ class afc_hub:
         self.AFC = self.printer.lookup_object("AFC")
 
         self.name = config.get_name().split()[-1]
-        self.type = config.get('type', None)
+        # self.unit = config.get('unit')
+        # self.type = config.get('type')
 
-        try:
-            self.unit = self.printer.load_object(config, "AFC_{}".format(self.type.replace("_", "")))
-        except:
-            raise error("{} not supported, please remove or fix correct type for AFC_hub in your configuration".format(self.type))
+        self.unit = None
+
+        # try:
+        #     self.unit = self.printer.lookup_object("AFC_{} {}".format(self.type, self.unit))
+        # except:
+        #     raise error("{} not supported, please remove or fix correct type for AFC_hub in your configuration".format(self.unit))
+
+        # self.gcode.respond_info("Hub unit {}".format(self.unit))
 
         # HUB Cut variables
         # Next two variables are used in AFC
@@ -91,6 +96,13 @@ class afc_hub:
 
         # Retract lane by `hub_cut_clear`.
         CUR_LANE.move( -self.cut_clear, self.AFC.short_moves_speed, self.AFC.short_moves_accel)
+
+    def get_status(self, eventtime):
+        str = {}
+        if self.unit is not None:
+            str["unit_name"] = self.unit.name
+        else: str["unit_name"] = "None"
+        return str
 
 def load_config_prefix(config):
     return afc_hub(config)

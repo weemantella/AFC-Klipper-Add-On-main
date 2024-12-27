@@ -8,6 +8,7 @@ import math
 import chelper
 from kinematics import extruder
 from . import AFC_assist
+from configfile import error
 from extras.AFC import add_filament_switch
 
 #LED
@@ -67,6 +68,7 @@ class AFCExtruderStepper:
         self.weight = None
         self.runout_lane = 'NONE'
         self.status = 'Not Loaded'
+        self.unit_obj = None                # Set on unit_name:connect callback
         unit = config.get('unit', None)                                                             # Unit name(AFC_hub) that this lane belongs to.
         if unit != None:
             self.unit = unit.split(':')[0]
@@ -75,6 +77,9 @@ class AFCExtruderStepper:
             self.unit = 'Unknown'
             self.index = 0
         self.hub= ''
+
+        self.gcode.respond_info("{}:connect".format(self.unit))
+        self.printer.register_event_handler("{}:connect".format(self.unit),self.handle_unit_connect)
 
         self.motion_queue = None
         self.next_cmd_time = 0.
@@ -147,6 +152,52 @@ class AFCExtruderStepper:
             if self.sensor_to_show is None or self.sensor_to_show == 'load':
                 self.load_filament_switch_name = "filament_switch_sensor {}_load".format(self.name)
                 self.fila_load = add_filament_switch(self.load_filament_switch_name, self.load, self.printer )
+
+    def handle_unit_connect(self, unit_obj):
+        """
+        Callback to register units object
+        """
+        # Saving reference to unit
+        self.unit_obj = unit_obj
+
+        # Registering lane name in unit
+        self.unit_obj.lanes[self.name] = self
+        self.AFC.stepper[self.name] = self
+
+        try:
+            self.extruder_obj = self.printer.lookup_object('AFC_extruder {}'.format(self.extruder_name))
+        except:
+            error_string = 'Error: No config found for extruder: {extruder} in [AFC_stepper {stepper}]. Please make sure [AFC_extruder {extruder}] config exists in AFC_Hardware.cfg'.format(
+                extruder=self.extruder_name, stepper=self.name )
+            raise error(error_string)
+        self.restore_prev_state()
+    
+    def restore_prev_state(self):
+        if self.unit_obj.name not in self.AFC.units_f and self.name not in self.AFC.units_f[self.unit_obj.name]:
+            return
+        
+        self.AFC.gcode.respond_info("{}".format(self.AFC.units_f[self.unit_obj.name][self.name]))
+        l = self.AFC.units_f[self.unit_obj.name][self.name]
+
+        if self.AFC.spoolman_ip !=None and l['spool_id'] != None:
+            self.AFC.SPOOL.set_spoolID(self, l['spool_id'], save_vars=False)
+        else:
+            self.material = l['material']
+            self.color = l['color']
+            self.weight=l['weight']
+
+        self.runout_lane = l['runout_lane']
+        if self.runout_lane == '': self.runout_lane='NONE'
+        self.map = l['map']
+        if self.map != 'NONE':
+            self.AFC.tool_cmds[self.map] = self.name
+        # Check first for hub_loaded as this was the old name in software with version <= 1030
+        if 'hub_loaded' in l: self.loaded_to_hub = l['hub_loaded']
+        # Check for loaded_to_hub as this is how its being saved version > 1030
+        if 'loaded_to_hub' in l: self.loaded_to_hub = l['loaded_to_hub']
+        self.tool_loaded = l['tool_loaded']
+        self.status = l['status']
+
 
     def _get_tmc_values(self, config):
         """
