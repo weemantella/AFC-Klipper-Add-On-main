@@ -26,8 +26,7 @@ class afcBoxTurtle(afcUnit):
         self.logo_error+='O |              \ \n'
         self.logo_error+='R |          |\ <span class=secondary--text>X</span> |\n'
         self.logo_error+='! \_________/ |___|</span>\n'
-
-        self.AFC.gcode.register_mux_command('CALIBRATE_AFC', "UNIT", self.name, self.cmd_CALIBRATE_AFC, desc=self.cmd_CALIBRATE_AFC_help)
+        self.AFC.gcode.register_command('CALIBRATE_AFC', self.cmd_CALIBRATE_AFC, desc=self.cmd_CALIBRATE_AFC_help)
 
     cmd_CALIBRATE_AFC_help = 'calibrate the dist hub for lane and then afc_bowden_length'
     def cmd_CALIBRATE_AFC(self, gcmd):

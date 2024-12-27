@@ -16,6 +16,10 @@ class afc:
         self.printer = config.get_printer()
         self.reactor = self.printer.get_reactor()
         self.printer.register_event_handler("klippy:connect",self.handle_connect)
+
+        # Registering stepper callback so that mux macro can be set properly with valid lane names
+        self.printer.register_event_handler("afc_stepper:register_macros",self.register_lane_macros)
+
         self.SPOOL = self.printer.load_object(config,'AFC_spool')
         self.ERROR = self.printer.load_object(config,'AFC_error')
         self.IDLE = self.printer.load_object(config,'idle_timeout')
@@ -142,6 +146,21 @@ class afc:
         if os.path.exists(self.VarFile + '.tool') and os.stat(self.VarFile + '.tool').st_size > 0:
             self.extruders_f=json.load(open(self.VarFile + '.tool'))
 
+    def register_lane_macros(self, lane_obj):
+        """
+        Callback function to register macros with proper lane names so that klipper errors out correctly when users supply lanes that 
+        are not valid
+
+        :param lane_obj: object for lane to register
+        """
+        self.gcode.register_mux_command('LANE_MOVE',    "LANE", lane_obj.name, self.cmd_LANE_MOVE,      desc=self.cmd_LANE_MOVE_help)
+        self.gcode.register_mux_command('TEST',         "LANE", lane_obj.name, self.cmd_TEST,           desc=self.cmd_TEST_help)
+        self.gcode.register_mux_command('HUB_LOAD',     "LANE", lane_obj.name, self.cmd_HUB_LOAD,       desc=self.cmd_HUB_LOAD_help)
+        self.gcode.register_mux_command('LANE_UNLOAD',  "LANE", lane_obj.name, self.cmd_LANE_UNLOAD,    desc=self.cmd_LANE_UNLOAD_help)
+        self.gcode.register_mux_command('TOOL_LOAD',    "LANE", lane_obj.name, self.cmd_TOOL_LOAD,      desc=self.cmd_TOOL_LOAD_help)
+        self.gcode.register_mux_command('TOOL_UNLOAD',  "LANE", lane_obj.name, self.cmd_TOOL_UNLOAD,    desc=self.cmd_TOOL_UNLOAD_help)
+        
+
     def handle_connect(self):
         """
         Handle the connection event.
@@ -150,15 +169,8 @@ class afc:
         """
 
         self.toolhead = self.printer.lookup_object('toolhead')
-
-        # GCODE REGISTERS
-        self.gcode.register_command('HUB_LOAD', self.cmd_HUB_LOAD, desc=self.cmd_HUB_LOAD_help)
-        self.gcode.register_command('LANE_UNLOAD', self.cmd_LANE_UNLOAD, desc=self.cmd_LANE_UNLOAD_help)
-        self.gcode.register_command('TOOL_LOAD', self.cmd_TOOL_LOAD, desc=self.cmd_TOOL_LOAD_help)
-        self.gcode.register_command('TOOL_UNLOAD', self.cmd_TOOL_UNLOAD, desc=self.cmd_TOOL_UNLOAD_help)
+        
         self.gcode.register_command('CHANGE_TOOL', self.cmd_CHANGE_TOOL, desc=self.cmd_CHANGE_TOOL_help)
-        self.gcode.register_command('LANE_MOVE', self.cmd_LANE_MOVE, desc=self.cmd_LANE_MOVE_help)
-        self.gcode.register_command('TEST', self.cmd_TEST, desc=self.cmd_TEST_help)
         self.gcode.register_command('HUB_CUT_TEST', self.cmd_HUB_CUT_TEST, desc=self.cmd_HUB_CUT_TEST_help)
         self.gcode.register_mux_command('SET_BOWDEN_LENGTH', 'AFC', None, self.cmd_SET_BOWDEN_LENGTH, desc=self.cmd_SET_BOWDEN_LENGTH_help)
         self.gcode.register_command('AFC_STATUS', self.cmd_AFC_STATUS, desc=self.cmd_AFC_STATUS_help)
@@ -1061,8 +1073,7 @@ class afc:
             except error:
                 screen_mac = 'None'
             str[UNIT]={}
-            for NAME in self.units[UNIT].lanes.keys():
-                CUR_LANE=self.stepper[NAME]
+            for NAME, CUR_LANE in self.units[UNIT].lanes.items():
                 str[UNIT][NAME]={}
                 str[UNIT][NAME]['LANE'] = CUR_LANE.index
                 str[UNIT][NAME]['map'] = CUR_LANE.map

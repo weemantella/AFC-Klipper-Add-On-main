@@ -72,7 +72,7 @@ class afcPrep:
                 logo_error+='  ' + unit.name + '\n'
 
                 LaneCheck = True
-                for LANE in unit.lanes:
+                for LANE in unit.lanes.values():
                     if not unit.system_Test(LANE, self.delay, self.assignTcmd):
                         LaneCheck = False
 

@@ -78,7 +78,6 @@ class AFCExtruderStepper:
             self.index = 0
         self.hub= ''
 
-        self.gcode.respond_info("{}:connect".format(self.unit))
         self.printer.register_event_handler("{}:connect".format(self.unit),self.handle_unit_connect)
 
         self.motion_queue = None
@@ -171,6 +170,9 @@ class AFCExtruderStepper:
                 extruder=self.extruder_name, stepper=self.name )
             raise error(error_string)
         self.restore_prev_state()
+        
+        # Send out event so that macros and be registered properly with valid lane names
+        self.printer.send_event("afc_stepper:register_macros", self)
     
     def restore_prev_state(self):
         if self.unit_obj.name not in self.AFC.units_f and self.name not in self.AFC.units_f[self.unit_obj.name]:

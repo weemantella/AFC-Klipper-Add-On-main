@@ -26,14 +26,10 @@ class afcUnit:
         self.printer.send_event("{}:connect".format(self.name), self)
         self.AFC.units[self.name] = self
 
-    def system_Test(self, LANE, delay, assignTcmd):
+    def system_Test(self, CUR_LANE, delay, assignTcmd):
         msg = ''
         succeeded = True
-        if LANE not in self.AFC.stepper:
-            self.AFC.gcode.respond_info('{} Unknown'.format(LANE.upper()))
-            return
-        CUR_LANE = self.AFC.stepper[LANE]
-
+        
         # Run test reverse/forward on each lane
         CUR_LANE.unsync_to_extruder(False)
         # CUR_LANE.move( 5, self.AFC.short_moves_speed, self.AFC.short_moves_accel, True)
