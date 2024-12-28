@@ -156,11 +156,10 @@ class afc:
         :param lane_obj: object for lane to register
         """
         self.gcode.register_mux_command('LANE_MOVE',    "LANE", lane_obj.name, self.cmd_LANE_MOVE,      desc=self.cmd_LANE_MOVE_help)
+        self.gcode.register_mux_command('LANE_UNLOAD',  "LANE", lane_obj.name, self.cmd_LANE_UNLOAD,    desc=self.cmd_LANE_UNLOAD_help)
         self.gcode.register_mux_command('TEST',         "LANE", lane_obj.name, self.cmd_TEST,           desc=self.cmd_TEST_help)
         self.gcode.register_mux_command('HUB_LOAD',     "LANE", lane_obj.name, self.cmd_HUB_LOAD,       desc=self.cmd_HUB_LOAD_help)
-        self.gcode.register_mux_command('LANE_UNLOAD',  "LANE", lane_obj.name, self.cmd_LANE_UNLOAD,    desc=self.cmd_LANE_UNLOAD_help)
         self.gcode.register_mux_command('TOOL_LOAD',    "LANE", lane_obj.name, self.cmd_TOOL_LOAD,      desc=self.cmd_TOOL_LOAD_help)
-        self.gcode.register_mux_command('TOOL_UNLOAD',  "LANE", lane_obj.name, self.cmd_TOOL_UNLOAD,    desc=self.cmd_TOOL_UNLOAD_help)
         
 
     def handle_connect(self):
@@ -172,11 +171,12 @@ class afc:
 
         self.toolhead = self.printer.lookup_object('toolhead')
         
-        self.gcode.register_command('CHANGE_TOOL', self.cmd_CHANGE_TOOL, desc=self.cmd_CHANGE_TOOL_help)
-        self.gcode.register_command('HUB_CUT_TEST', self.cmd_HUB_CUT_TEST, desc=self.cmd_HUB_CUT_TEST_help)
-        self.gcode.register_mux_command('SET_BOWDEN_LENGTH', 'AFC', None, self.cmd_SET_BOWDEN_LENGTH, desc=self.cmd_SET_BOWDEN_LENGTH_help)
-        self.gcode.register_command('AFC_STATUS', self.cmd_AFC_STATUS, desc=self.cmd_AFC_STATUS_help)
-        self.gcode.register_command('SET_AFC_TOOLCHANGES', self.cmd_SET_AFC_TOOLCHANGES)
+        self.gcode.register_command('CHANGE_TOOL',                          self.cmd_CHANGE_TOOL,       desc=self.cmd_CHANGE_TOOL_help)
+        self.gcode.register_command('TOOL_UNLOAD',                          self.cmd_TOOL_UNLOAD,       desc=self.cmd_TOOL_UNLOAD_help)
+        self.gcode.register_command('HUB_CUT_TEST',                         self.cmd_HUB_CUT_TEST,      desc=self.cmd_HUB_CUT_TEST_help)
+        self.gcode.register_command('AFC_STATUS',                           self.cmd_AFC_STATUS,        desc=self.cmd_AFC_STATUS_help)
+        self.gcode.register_command('SET_AFC_TOOLCHANGES',                  self.cmd_SET_AFC_TOOLCHANGES)
+        self.gcode.register_mux_command('SET_BOWDEN_LENGTH', 'AFC', None,   self.cmd_SET_BOWDEN_LENGTH, desc=self.cmd_SET_BOWDEN_LENGTH_help)
 
     def print_version(self):
         import subprocess

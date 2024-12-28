@@ -174,7 +174,7 @@ class afcBoxTurtle(afcUnit):
 
             self.AFC.gcode.respond_info('Calibrating Bowden Length with {}'.format(CUR_LANE.name.upper()))
 
-            move_until_state(CUR_LANE, lambda: CUR_HUB.state, CUR_HUB.move_dis, tol, short_dis)
+            move_until_state(CUR_LANE, lambda: CUR_LANE.hub_obj.state, CUR_LANE.hub_obj.move_dis, tol, short_dis)
 
             bow_pos = 0
             if CUR_LANE.extruder_obj.tool_start:
