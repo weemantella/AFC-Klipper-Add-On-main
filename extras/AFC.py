@@ -784,7 +784,7 @@ class afc:
             return False
 
         self.gcode.respond_info("Unloading {}".format(CUR_LANE.name))
-        
+
         # TODO: Need to move setting temperature here
 
         # Quick pull to prevent oozing.
@@ -1036,27 +1036,10 @@ class afc:
         if LANE.prep_state:
             if LANE.load_state:
                 if LANE.extruder_obj is not None and LANE.extruder_obj.lane_loaded == LANE.name:
-                    return 'In Tool:' + self.HexConvert(self.led_tool_loaded)
-                return "Ready:" + self.HexConvert(self.led_ready)
-            return 'Prep:' + self.HexConvert(self.led_prep_loaded)
-        return 'Not Ready:' + self.HexConvert(self.led_not_ready)
-
-    def HexConvert(self,tmp):
-        led=tmp.split(',')
-        if float(led[0])>0:
-            led[0]=int(255*float(led[0]))
-        else:
-            led[0]=0
-        if float(led[1])>0:
-            led[1]=int(255*float(led[1]))
-        else:
-            led[1]=0
-        if float(led[2])>0:
-            led[2]=int(255*float(led[2]))
-        else:
-            led[2]=0
-
-        return '#{:02x}{:02x}{:02x}'.format(*led)
+                    return 'In Tool:' + HexConvert(self.led_tool_loaded)
+                return "Ready:" + HexConvert(self.led_ready)
+            return 'Prep:' + HexConvert(self.led_prep_loaded)
+        return 'Not Ready:' + HexConvert(self.led_not_ready)
 
     def get_status(self, eventtime):
         str = {}
@@ -1162,6 +1145,23 @@ class afc:
         except:
             self.gcode.respond_info("Error trying to map lane {lane} to {tool_macro}, please make sure there are no macros already setup for {tool_macro}".format(lane=[CUR_LANE.name], tool_macro=CUR_LANE.map), )
         self.save_vars()
+
+def HexConvert(tmp):
+    led=tmp.split(',')
+    if float(led[0])>0:
+        led[0]=int(255*float(led[0]))
+    else:
+        led[0]=0
+    if float(led[1])>0:
+        led[1]=int(255*float(led[1]))
+    else:
+        led[1]=0
+    if float(led[2])>0:
+        led[2]=int(255*float(led[2]))
+    else:
+        led[2]=0
+
+    return '#{:02x}{:02x}{:02x}'.format(*led)
 
 def add_filament_switch( switch_name, switch_pin, printer ):
     """
