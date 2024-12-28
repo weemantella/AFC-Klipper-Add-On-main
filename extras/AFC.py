@@ -1037,6 +1037,7 @@ class afc:
                 self.in_toolchange = False
         else:
             self.gcode.respond_info("{} already loaded".format(lane))
+            if not self.AFC.error_state: self.current_toolchange += 1
 
     def get_filament_status(self, LANE):
         if LANE.prep_state:
