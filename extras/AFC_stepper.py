@@ -76,7 +76,7 @@ class AFCExtruderStepper:
         else:
             self.unit = 'Unknown'
             self.index = 0
-        self.hub= ''
+        self.hub= config.get("hub", None)
 
         self.printer.register_event_handler("{}:connect".format(self.unit),self.handle_unit_connect)
 
@@ -162,6 +162,12 @@ class AFCExtruderStepper:
         # Registering lane name in unit
         self.unit_obj.lanes[self.name] = self
         self.AFC.stepper[self.name] = self
+
+        # TODO: Need to add error checking
+        if self.hub is None:
+            self.hub_obj = self.unit_obj.hub_array[list(self.unit_obj.hub_array)[0]]
+        else:
+            self.hub_obj = self.unit_obj.hub_array[self.hub]
 
         try:
             self.extruder_obj = self.printer.lookup_object('AFC_extruder {}'.format(self.extruder_name))

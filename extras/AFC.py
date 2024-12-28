@@ -207,24 +207,22 @@ class afc:
         """
         status_msg = ''
 
-        for UNIT in self.units.keys():
+        for UNIT in self.units.values():
             # Find the maximum length of lane names to determine the column width
-            max_lane_length = max(len(lane) for lane in self.units[UNIT].keys())
+            self.gcode.respond_info("Status {}".format(UNIT))
+            max_lane_length = max(len(lane) for lane in UNIT.lanes.keys())
 
-            status_msg += '<span class=info--text>{} Status</span>\n'.format(UNIT)
+            status_msg += '<span class=info--text>{} Status</span>\n'.format(UNIT.name)
 
             # Create a dynamic format string that adjusts based on lane name length
             header_format = '{:<{}} | Prep | Load |\n'
             status_msg += header_format.format("LANE", max_lane_length)
 
-            for LANE in self.units[UNIT].keys():
+            for CUR_LANE in UNIT.lanes.values():
                 lane_msg = ''
-                CUR_LANE = self.stepper[LANE]
-                CUR_HUB = self.printer.lookup_object('AFC_hub '+ UNIT)
-                CUR_EXTRUDER = self.printer.lookup_object('AFC_extruder ' + CUR_LANE.extruder_name)
                 if self.current != None:
                     if self.current == CUR_LANE.name:
-                        if not CUR_EXTRUDER.tool_start_state or not CUR_HUB.state:
+                        if not CUR_LANE.extruder_obj.tool_start_state or not CUR_LANE.hub_obj.state:
                             lane_msg += '<span class=warning--text>{:<{}} </span>'.format(CUR_LANE.name.upper(), max_lane_length)
                         else:
                             lane_msg += '<span class=success--text>{:<{}} </span>'.format(CUR_LANE.name.upper(), max_lane_length)
@@ -242,15 +240,15 @@ class afc:
                 else:
                     lane_msg += '  <span class=error--text>xx</span>  |\n'
                 status_msg += lane_msg
-            if CUR_HUB.state == True:
+            if CUR_LANE.hub_obj.state == True:
                 status_msg += 'HUB: <span class=success--text><-></span>'
             else:
                 status_msg += 'HUB: <span class=error--text>x</span>'
-            if CUR_EXTRUDER.tool_start_state == True:
+            if CUR_LANE.extruder_obj.tool_start_state == True:
                 status_msg += '  Tool: <span class=success--text><-></span>'
             else:
                 status_msg += '  Tool: <span class=error--text>x</span>'
-            if CUR_EXTRUDER.tool_start == 'buffer':
+            if CUR_LANE.extruder_obj.tool_start == 'buffer':
                 status_msg += '\n<span class=info--text>Ram sensor enabled</span>'
         self.gcode.respond_raw(status_msg)
 
