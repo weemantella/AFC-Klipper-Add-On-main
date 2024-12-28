@@ -56,7 +56,7 @@ class AFCExtruderStepper:
 
         #stored status variables
         self.name = config.get_name().split()[-1]
-        self.extruder_name = config.get('extruder')                                                 # AFC_extruder name in config file
+        self.extruder_name = config.get('extruder', None)                                           # AFC_extruder name in config file
         self.extruder_obj = None
 
         self.map = config.get('cmd','NONE')                                                         # Need description
@@ -170,9 +170,12 @@ class AFCExtruderStepper:
             self.hub_obj = self.unit_obj.hub_array[self.hub]
 
         try:
-            self.extruder_obj = self.printer.lookup_object('AFC_extruder {}'.format(self.extruder_name))
+            if self.extruder_name is not None:
+                self.extruder_obj = self.printer.lookup_object('AFC_extruder {}'.format(self.extruder_name))
+            else:
+                self.extruder_obj = self.unit_obj.extruder_obj
         except:
-            error_string = 'Error: No config found for extruder: {extruder} in [AFC_stepper {stepper}]. Please make sure [AFC_extruder {extruder}] config exists in AFC_Hardware.cfg'.format(
+            error_string = 'Error: No config found for extruder: {extruder} in [AFC_stepper {stepper}]. Please make sure [AFC_extruder {extruder}] section exists in your config'.format(
                 extruder=self.extruder_name, stepper=self.name )
             raise error(error_string)
         self.restore_prev_state()

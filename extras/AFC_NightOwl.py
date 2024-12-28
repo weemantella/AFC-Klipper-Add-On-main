@@ -3,6 +3,7 @@ from extras.AFC_unit import afcUnit
 class afcNightOwl(afcUnit):
     def __init__(self, config):
         super().__init__(config)
+        self.type = "Night_Owl"
 
     def handle_connect(self):
         """

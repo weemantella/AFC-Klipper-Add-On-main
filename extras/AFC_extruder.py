@@ -48,10 +48,10 @@ class AFCextruder:
                     ppins.allow_multi_use_pin(pin_desc)
 
                 if self.enable_sensors_in_gui:
-                    self.adv_filament_switch_name = "filament_switch_sensor {}".format("buffer_advance")
+                    self.adv_filament_switch_name = "filament_switch_sensor {}_{}".format(self.buffer_name, "expanded")
                     self.fila_avd = add_filament_switch(self.adv_filament_switch_name, ap, self.printer )
 
-                    self.trail_filament_switch_name = "filament_switch_sensor {}".format("buffer_trail")
+                    self.trail_filament_switch_name = "filament_switch_sensor {}_{}".format(self.buffer_name, "compressed")
                     self.fila_trail = add_filament_switch(self.trail_filament_switch_name, tp, self.printer )
             else:
                 self.gcode.respond_info("advance_pin and trailing_pin must be defined to enable ram sensor")

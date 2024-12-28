@@ -10,17 +10,8 @@ class afc_hub:
         self.AFC = self.printer.lookup_object("AFC")
 
         self.name = config.get_name().split()[-1]
-        # self.unit = config.get('unit')
-        # self.type = config.get('type')
 
         self.unit = None
-
-        # try:
-        #     self.unit = self.printer.lookup_object("AFC_{} {}".format(self.type, self.unit))
-        # except:
-        #     raise error("{} not supported, please remove or fix correct type for AFC_hub in your configuration".format(self.unit))
-
-        # self.gcode.respond_info("Hub unit {}".format(self.unit))
 
         # HUB Cut variables
         # Next two variables are used in AFC

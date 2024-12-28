@@ -1,30 +1,42 @@
 from configfile import error
 class afcUnit:
     def __init__(self, config):
-        self.printer = config.get_printer()
-        self.printer.register_event_handler("klippy:connect", self.handle_connect)
-        self.gcode = self.printer.lookup_object('gcode')
+        self.printer    = config.get_printer()
+        self.gcode      = self.printer.lookup_object('gcode')
         
-        self.full_name = config.get_name().split()
-        self.name = self.full_name[-1]
-        self.hub = config.getlists("hub", None)
+        self.full_name  = config.get_name().split()
+        self.name       = self.full_name[-1]
+        self.hub        = config.getlists("hub", None)
+        self.extruder   = config.get("extruder")
 
-        self.lanes = {}
+        self.lanes      = {}
+
+        self.printer.register_event_handler("klippy:connect", self.handle_connect)
 
     def handle_connect(self):
         self.AFC = self.printer.lookup_object('AFC')
+        self.AFC.units[self.name] = self
+
         self.hub_array = {}
         for hub in self.hub:
             h = self.printer.lookup_object("AFC_hub {}".format(hub))
             if h.unit is not None:
                 raise error("AFC_hub {} already has a unit {} assigned, can't assign {}. Only one unit can be assigned per AFC_hub".format(hub, " ".join(h.unit.full_name), " ".join(self.full_name)))
             else:
+                # TODO: Not sure what I was thinking for this array stuff, maybe just make it a object and can override at stepper level
+                # Maybe this was done to force the user to input all the hubs that will be in this unit?
                 self.hub_array[hub] = h
                 self.hub_array[hub].unit = self
 
+        try:
+            self.extruder_obj = self.printer.lookup_object("AFC_extruder {}".format(self.extruder))
+        except:
+            error_string = 'Error: No config found for extruder: {extruder} in [AFC_unit {unit}]. Please make sure [AFC_extruder {extruder}] section exists in your config'.format(
+                            extruder=self.extruder, unit=self.name )
+            raise error( error_string )
+
         # Send out event so lanes can store units object
         self.printer.send_event("{}:connect".format(self.name), self)
-        self.AFC.units[self.name] = self
 
     def system_Test(self, CUR_LANE, delay, assignTcmd, disable_movement):
         msg = ''
