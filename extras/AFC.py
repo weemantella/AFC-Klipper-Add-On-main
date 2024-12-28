@@ -1147,19 +1147,14 @@ class afc:
         self.save_vars()
 
 def HexConvert(tmp):
-    led=tmp.split(',')
-    if float(led[0])>0:
-        led[0]=int(255*float(led[0]))
-    else:
-        led[0]=0
-    if float(led[1])>0:
-        led[1]=int(255*float(led[1]))
-    else:
-        led[1]=0
-    if float(led[2])>0:
-        led[2]=int(255*float(led[2]))
-    else:
-        led[2]=0
+    def convert_led(value):
+        if float(value)>0:
+            return int(255*float(value))
+        else: return 0
+    
+    led = []
+    for l in tmp.split(','):
+        led.append(convert_led(l))
 
     return '#{:02x}{:02x}{:02x}'.format(*led)
 
