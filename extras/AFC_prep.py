@@ -12,7 +12,7 @@ class afcPrep:
         self.printer = config.get_printer()
         self.printer.register_event_handler("klippy:connect", self.handle_connect)
         self.delay = config.getfloat('delay_time', 0.1, minval=0.0)                 # Time to delay when moving extruders and spoolers during PREP routine
-        self.enable = config.getboolean("enable", False)                            # Set True to disable PREP checks
+        self.disable_movement = config.getboolean("enable", False)                            # Set True to disable PREP checks
 
         # Flag to set once resume rename as occurred for the first time
         self.rename_occurred = False
@@ -57,40 +57,36 @@ class afcPrep:
 
         self.AFC.tool_cmds={}
 
-        if self.enable == False:
-            self.AFC.gcode.respond_info('Prep Checks Disabled')
-            return
-        elif len(self.AFC.units) >0:
-            for keys, unit in self.AFC.units.items():
-                logo=''
-                logo_error = ''
-                self.AFC.gcode.respond_info('{} {} Prepping lanes'.format(unit.full_name[0], unit.name))
+        for unit in self.AFC.units.values():
+            logo=''
+            logo_error = ''
+            self.AFC.gcode.respond_info('{} {} Prepping lanes'.format(unit.full_name[0], unit.name))
 
-                logo=unit.logo
-                logo+='  ' + unit.name + '\n'
-                logo_error=unit.logo_error
-                logo_error+='  ' + unit.name + '\n'
+            logo=unit.logo
+            logo+='  ' + unit.name + '\n'
+            logo_error=unit.logo_error
+            logo_error+='  ' + unit.name + '\n'
 
-                LaneCheck = True
-                for LANE in unit.lanes.values():
-                    if not unit.system_Test(LANE, self.delay, self.assignTcmd):
-                        LaneCheck = False
+            LaneCheck = True
+            for LANE in unit.lanes.values():
+                if not unit.system_Test(LANE, self.delay, self.assignTcmd, self.disable_movement):
+                    LaneCheck = False
 
-                if LaneCheck:
-                    self.AFC.gcode.respond_raw(logo)
-                else:
-                    self.AFC.gcode.respond_raw(logo_error)
-            try:
-                bypass = self.printer.lookup_object('filament_switch_sensor bypass').runout_helper
-                if bypass.filament_present == True:
-                    self.AFC.gcode.respond_info("Filament loaded in bypass, not doing toolchange")
-            except: bypass = None
+            if LaneCheck:
+                self.AFC.gcode.respond_raw(logo)
+            else:
+                self.AFC.gcode.respond_raw(logo_error)
+        try:
+            bypass = self.printer.lookup_object('filament_switch_sensor bypass').runout_helper
+            if bypass.filament_present == True:
+                self.AFC.gcode.respond_info("Filament loaded in bypass, not doing toolchange")
+        except: bypass = None
 
-            for key, CUR_EXTRUDER in self.AFC.extruders.items():
-                # CUR_EXTRUDER = self.printer.lookup_object('AFC_extruder ' + EXTRUDE)
-                if CUR_EXTRUDER.tool_start_state == True and bypass != True:
-                    if not CUR_EXTRUDER.lane_loaded:
-                        self.AFC.gcode.respond_info("<span class=error--text>{} loaded with out identifying lane in AFC.vars.tool file<span>".format(EXTRUDE))
+        for CUR_EXTRUDER in self.AFC.extruders.values():
+            # CUR_EXTRUDER = self.printer.lookup_object('AFC_extruder ' + EXTRUDE)
+            if CUR_EXTRUDER.tool_start_state == True and bypass != True:
+                if not CUR_EXTRUDER.lane_loaded:
+                    self.AFC.gcode.respond_info("<span class=error--text>{} loaded with out identifying lane in AFC.vars.tool file<span>".format(EXTRUDE))
 
         # Defaulting to no active spool, putting at end so endpoint has time to register
         if self.AFC.current is None:
