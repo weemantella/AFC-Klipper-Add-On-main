@@ -189,7 +189,9 @@ class AFCExtruderStepper:
         self.printer.send_event("afc_stepper:register_macros", self)
     
     def restore_prev_state(self):
-        if self.unit_obj.name not in self.AFC.units_f and self.name not in self.AFC.units_f[self.unit_obj.name]:
+        if self.unit_obj.name not in self.AFC.units_f: 
+            return
+        if self.name not in self.AFC.units_f[self.unit_obj.name]:
             return
         
         self.AFC.gcode.respond_info("{}".format(self.AFC.units_f[self.unit_obj.name][self.name]))

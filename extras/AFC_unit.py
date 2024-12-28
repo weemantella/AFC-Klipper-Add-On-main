@@ -38,16 +38,18 @@ class afcUnit:
         # Send out event so lanes can store units object
         self.printer.send_event("{}:connect".format(self.name), self)
 
-    def system_Test(self, CUR_LANE, delay, assignTcmd, disable_movement):
+    def system_Test(self, CUR_LANE, delay, assignTcmd, enable_movement):
         msg = ''
         succeeded = True
         
         # Run test reverse/forward on each lane
         CUR_LANE.unsync_to_extruder(False)
-        if not disable_movement:
+        if enable_movement:
             CUR_LANE.move( 5, self.AFC.short_moves_speed, self.AFC.short_moves_accel, True)
             self.AFC.reactor.pause(self.AFC.reactor.monotonic() + delay)
             CUR_LANE.move( -5, self.AFC.short_moves_speed, self.AFC.short_moves_accel, True)
+        else:
+            self.AFC.reactor.pause(self.AFC.reactor.monotonic() + delay)
 
         if CUR_LANE.prep_state == False:
             if CUR_LANE.load_state == False:

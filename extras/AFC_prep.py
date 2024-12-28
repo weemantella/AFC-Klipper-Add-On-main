@@ -12,7 +12,7 @@ class afcPrep:
         self.printer = config.get_printer()
         self.printer.register_event_handler("klippy:connect", self.handle_connect)
         self.delay = config.getfloat('delay_time', 0.1, minval=0.0)                 # Time to delay when moving extruders and spoolers during PREP routine
-        self.disable_movement = config.getboolean("enable", False)                            # Set True to disable PREP checks
+        self.enable_movement = config.getboolean("enable", False)                            # Set True to disable PREP checks
 
         # Flag to set once resume rename as occurred for the first time
         self.rename_occurred = False
@@ -69,7 +69,7 @@ class afcPrep:
 
             LaneCheck = True
             for LANE in unit.lanes.values():
-                if not unit.system_Test(LANE, self.delay, self.assignTcmd, self.disable_movement):
+                if not unit.system_Test(LANE, self.delay, self.assignTcmd, self.enable_movement):
                     LaneCheck = False
 
             if LaneCheck:

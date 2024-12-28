@@ -30,7 +30,9 @@ class afc:
         self.current = None
         self.error_state = False
         self.units = {}
+        self.units_f = {}
         self.extruders = {}
+        self.extruders_f = {}
         self.stepper = {}
         self.tool_cmds={}
         self.afc_monitoring = False
