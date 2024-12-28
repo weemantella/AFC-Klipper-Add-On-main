@@ -186,7 +186,7 @@ class afc:
 
     def cmd_SET_AFC_TOOLCHANGES(self, gcmd):
         self.number_of_toolchanges  = gcmd.get_int("TOOLCHANGES")
-        self.current_toolchange     = 1 # Reset back to one
+        self.current_toolchange     = 0 # Reset back to one
         if self.number_of_toolchanges > 0: 
             self.gcode.respond_info("Total number of toolchanges set to {}".format(self.number_of_toolchanges))
 
@@ -1007,6 +1007,7 @@ class afc:
             CUR_LANE = self.stepper[lane]
             # Check if the lane has completed the preparation process required for tool changes.
             if CUR_LANE._afc_prep_done:
+                if not self.AFC.error_state: self.current_toolchange += 1
                 # Log the tool change operation for debugging or informational purposes.
                 self.gcode.respond_info("Tool Change - {} -> {}".format(self.current, lane))
                 if self.number_of_toolchanges != 0 and self.current_toolchange != self.number_of_toolchanges:
@@ -1034,7 +1035,6 @@ class afc:
                 self.gcode.respond_info("{} is now loaded in toolhead".format(lane))
                 self.restore_pos()
                 self.in_toolchange = False
-                self.current_toolchange += 1
         else:
             self.gcode.respond_info("{} already loaded".format(lane))
 
