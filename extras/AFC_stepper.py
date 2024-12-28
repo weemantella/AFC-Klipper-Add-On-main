@@ -79,6 +79,7 @@ class AFCExtruderStepper:
         self.hub= config.get("hub", None)
 
         self.printer.register_event_handler("{}:connect".format(self.unit),self.handle_unit_connect)
+        self.printer.register_event_handler("klippy:ready", self.handle_ready)
 
         self.motion_queue = None
         self.next_cmd_time = 0.
@@ -151,6 +152,10 @@ class AFCExtruderStepper:
             if self.sensor_to_show is None or self.sensor_to_show == 'load':
                 self.load_filament_switch_name = "filament_switch_sensor {}_load".format(self.name)
                 self.fila_load = add_filament_switch(self.load_filament_switch_name, self.load, self.printer )
+
+    def handle_ready(self):
+        if self.unit_obj is None:
+            raise error("Unit {unit} is not defined in your configuration file. Please defined unit ex. [AFC_BoxTurtle {unit}]".format(unit=self.unit))
 
     def handle_unit_connect(self, unit_obj):
         """
