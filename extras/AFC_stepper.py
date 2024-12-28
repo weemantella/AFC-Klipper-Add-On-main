@@ -68,6 +68,7 @@ class AFCExtruderStepper:
         self.weight = None
         self.runout_lane = 'NONE'
         self.status = 'Not Loaded'
+        self.extruder_temp = None               # Extruder temp based off material
         self.unit_obj = None                # Set on unit_name:connect callback
         unit = config.get('unit', None)                                                             # Unit name(AFC_hub) that this lane belongs to.
         if unit != None:

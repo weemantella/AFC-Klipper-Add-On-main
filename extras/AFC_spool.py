@@ -194,7 +194,7 @@ class afcSpool:
         based on the information retrieved from the Spoolman API.
 
         Usage: `SET_SPOOL_ID LANE=<lane> SPOOL_ID=<spool_id>`
-        Example: `SET_SPOOL_IDD LANE=leg1 SPOOL_ID=12345`
+        Example: `SET_SPOOL_ID LANE=leg1 SPOOL_ID=12345`
 
         Args:
             gcmd: The G-code command object containing the parameters for the command.
@@ -217,6 +217,12 @@ class afcSpool:
             CUR_LANE = self.AFC.stepper[lane]
             self.set_spoolID(CUR_LANE, SpoolID)
 
+    def _get_filament_values( self, filament, field):
+        value = None
+        if field in filament:
+            value = filament[field]
+        return value
+
     def set_spoolID(self, CUR_LANE, SpoolID, save_vars=True):
         if self.AFC.spoolman_ip !=None:
             if SpoolID !='':
@@ -224,15 +230,18 @@ class afcSpool:
                     url =  "{}{}".format(self.URL, SpoolID)
                     result = json.load(urlopen(url))
                     CUR_LANE.spool_id = SpoolID
-                    CUR_LANE.material = result['filament']['material']
-                    CUR_LANE.color = '#' + result['filament']['color_hex']
-                    if 'remaining_weight' in result: CUR_LANE.weight =  result['remaining_weight']
+                    
+                    CUR_LANE.material       = self._get_filament_values( result['filament'], 'material')
+                    CUR_LANE.weight         = self._get_filament_values( result['filament'], 'remaining_weight')
+                    CUR_LANE.extruder_temp  = self._get_filament_values( result['filament'], 'settings_extruder_temp')
                     # Check to see if filament is defined as multi color and take the first color for now
                     # Once support for multicolor is added this needs to be updated
                     if "multi_color_hexes" in result['filament']:
-                        CUR_LANE.color = '#' + result['filament']['multi_color_hexes'].split(",")[0]
+                        CUR_LANE.color = '#{}'.format( self._get_filament_values( result['filament'], 'multi_color_hexes').split(",")[0] )
                     else:
-                        CUR_LANE.color = '#' + result['filament']['color_hex']
+                        CUR_LANE.color = '#{}'.format( self._get_filament_values( result['filament'], 'color_hex') )
+                    
+                    
                 except Exception as e:
                     self.AFC.ERROR.AFC_error("Error when trying to get Spoolman data for ID:{}, Error: {}".format(SpoolID, e), False)
             else:
@@ -240,6 +249,7 @@ class afcSpool:
                 CUR_LANE.material = ''
                 CUR_LANE.color = ''
                 CUR_LANE.weight = ''
+                CUR_LANE.extruder_temp = None
             if save_vars: self.AFC.save_vars()
 
     cmd_SET_RUNOUT_help = "change filaments ID"
