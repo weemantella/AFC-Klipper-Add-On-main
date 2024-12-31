@@ -1120,11 +1120,11 @@ class afc:
                 str["system"]["extruders"][key]['tool_end_sensor']   = None
 
             if CUR_EXTRUDER.lane_loaded:
-                str["system"]["extruders"][CUR_EXTRUDER]['buffer']           = self.lane_obj[CUR_EXTRUDER.lane_loaded].buffer_obj.name
-                str["system"]["extruders"][CUR_EXTRUDER]['buffer_status']    = self.lane_obj[CUR_EXTRUDER.lane_loaded].buffer_obj.buffer_status()
+                str["system"]["extruders"][key]['buffer']           = self.stepper[CUR_EXTRUDER.lane_loaded].buffer_obj.name
+                str["system"]["extruders"][key]['buffer_status']    = self.stepper[CUR_EXTRUDER.lane_loaded].buffer_status()
             else:
-                str["system"]["extruders"][CUR_EXTRUDER]['buffer']           = "NONE"
-                str["system"]["extruders"][CUR_EXTRUDER]['buffer_status']    = "Not Loaded"
+                str["system"]["extruders"][key]['buffer']           = "NONE"
+                str["system"]["extruders"][key]['buffer_status']    = "Not Loaded"
         return str
 
     def is_homed(self):
