@@ -84,7 +84,7 @@ class afcPrep:
 
         for CUR_EXTRUDER in self.AFC.extruders.values():
             # CUR_EXTRUDER = self.printer.lookup_object('AFC_extruder ' + EXTRUDE)
-            if CUR_EXTRUDER.tool_start_state == True and bypass != True:
+            if CUR_EXTRUDER.tool_start != "buffer" and CUR_EXTRUDER.get_toolhead_sensor_state() == True and bypass != True:
                 if not CUR_EXTRUDER.lane_loaded:
                     self.AFC.gcode.respond_info("<span class=error--text>{} loaded with out identifying lane in AFC.vars.tool file<span>".format(EXTRUDE))
 

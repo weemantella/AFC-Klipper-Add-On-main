@@ -178,15 +178,16 @@ class afcBoxTurtle(afcUnit):
 
             bow_pos = 0
             if CUR_LANE.extruder_obj.tool_start:
-                while not CUR_LANE.extruder_obj.tool_start_state:
+                while not CUR_LANE.get_toolhead_sensor_state():
                     CUR_LANE.move(dis, self.AFC.short_moves_speed, self.AFC.short_moves_accel)
                     bow_pos += dis
                     self.AFC.reactor.pause(self.AFC.reactor.monotonic() + 0.1)
-                bow_pos = calc_position(CUR_LANE, lambda: CUR_LANE.extruder_obj.tool_start_state, bow_pos, short_dis, tol)
+                bow_pos = calc_position(CUR_LANE, lambda: CUR_LANE.get_toolhead_sensor_state(), bow_pos, short_dis, tol)
                 CUR_LANE.move(bow_pos * -1, self.AFC.long_moves_speed, self.AFC.long_moves_accel, True)
                 calibrate_hub(CUR_LANE)
                 if CUR_LANE.hub_obj.state:
                     CUR_LANE.move(CUR_LANE.hub_obj.move_dis * -1, self.AFC.short_moves_speed, self.AFC.short_moves_accel, True)
+
                 if CUR_LANE.extruder_obj.tool_start == 'buffer':
                     cal_msg += '\n afc_bowden_length: {}'.format(bow_pos - (short_dis * 2))
                 else:

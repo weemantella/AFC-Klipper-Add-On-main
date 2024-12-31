@@ -226,7 +226,7 @@ class afc:
                 lane_msg = ''
                 if self.current != None:
                     if self.current == CUR_LANE.name:
-                        if not CUR_LANE.extruder_obj.tool_start_state or not CUR_LANE.hub_obj.state:
+                        if not CUR_LANE.get_toolhead_sensor_state() or not CUR_LANE.hub_obj.state:
                             lane_msg += '<span class=warning--text>{:<{}} </span>'.format(CUR_LANE.name.upper(), max_lane_length)
                         else:
                             lane_msg += '<span class=success--text>{:<{}} </span>'.format(CUR_LANE.name.upper(), max_lane_length)
@@ -244,16 +244,25 @@ class afc:
                 else:
                     lane_msg += '  <span class=error--text>xx</span>  |\n'
                 status_msg += lane_msg
+
             if CUR_LANE.hub_obj.state == True:
                 status_msg += 'HUB: <span class=success--text><-></span>'
             else:
                 status_msg += 'HUB: <span class=error--text>x</span>'
-            if CUR_LANE.extruder_obj.tool_start_state == True:
-                status_msg += '  Tool: <span class=success--text><-></span>'
+
+            extruder_msg = '  Tool: <span class=error--text>x</span>'
+            if CUR_LANE.extruder_obj.tool_start != "buffer":
+                if CUR_LANE.extruder_obj.tool_start_state == True:
+                    extruder_msg = '  Tool: <span class=success--text><-></span>'
             else:
-                status_msg += '  Tool: <span class=error--text>x</span>'
+                if CUR_LANE.lane_loaded and CUR_LANE.extruder_obj.lane_loaded in self.units[UNIT]:
+                    if CUR_LANE.get_toolhead_sensor_state() == True:
+                        extruder_msg = '  Tool: <span class=success--text><-></span>'
+
+            status_msg += extruder_msg
             if CUR_LANE.extruder_obj.tool_start == 'buffer':
-                status_msg += '\n<span class=info--text>Ram sensor enabled</span>'
+                status_msg += '\n<span class=info--text>Ram sensor enabled</span>\n'
+
         self.gcode.respond_raw(status_msg)
 
     cmd_SET_BOWDEN_LENGTH_help = "Helper to dynamically set length of bowden between hub and toolhead. Pass in HUB if using multiple box turtles"
@@ -686,7 +695,7 @@ class afc:
             # Ensure filament reaches the toolhead.
             tool_attempts = 0
             if CUR_LANE.extruder_obj.tool_start:
-                while not CUR_LANE.extruder_obj.tool_start_state:
+                while not CUR_LANE.extruder_obj.get_toolhead_sensor_state():
                     tool_attempts += 1
                     CUR_LANE.move(self.short_move_dis, CUR_LANE.extruder_obj.tool_load_speed, self.long_moves_accel)
                     if tool_attempts > 20:
@@ -711,7 +720,7 @@ class afc:
             if CUR_LANE.extruder_obj.tool_start == "buffer":
                 CUR_LANE.unsync_to_extruder()
                 load_checks = 0
-                while CUR_LANE.extruder_obj.tool_start_state == True:
+                while CUR_LANE.extruder_obj.get_toolhead_sensor_state() == True:
                     CUR_LANE.move( self.short_move_dis * -1, self.short_moves_speed, self.short_moves_accel )
                     load_checks += 1
                     self.reactor.pause(self.reactor.monotonic() + 0.1)
@@ -723,10 +732,8 @@ class afc:
                         break
                 CUR_LANE.sync_to_extruder()
             # Update tool and lane status.
-            CUR_LANE.status = 'Tooled'
-            CUR_LANE.tool_loaded = True
-            self.current = CUR_LANE.name
-            CUR_LANE.extruder_obj.enable_buffer()
+            CUR_LANE.set_loaded()
+            CUR_LANE.enable_buffer()
 
             # Activate the tool-loaded LED and handle filament operations if enabled.
             self.afc_led(self.led_tool_loaded, CUR_LANE.led_index)
@@ -828,7 +835,7 @@ class afc:
         CUR_LANE.status = 'unloading'
         self.save_vars()
         # Disable the buffer if it's active.
-        CUR_LANE.extruder_obj.disable_buffer()
+        CUR_LANE.disable_buffer()
 
         # Activate LED indicator for unloading.
         self.afc_led(self.led_unloading, CUR_LANE.led_index)
@@ -861,7 +868,7 @@ class afc:
         if CUR_LANE.extruder_obj.tool_start == "buffer":
             # if ramming is enabled, AFC will retract to collapse buffer before unloading
             CUR_LANE.unsync_to_extruder()
-            while CUR_LANE.extruder_obj.buffer_trailing == False:
+            while CUR_LANE.get_trailing() == False:
                 # attempt to return buffer to trailng pin
                 CUR_LANE.move( self.short_move_dis * -1, self.short_moves_speed, self.short_moves_accel )
                 num_tries += 1
@@ -878,7 +885,7 @@ class afc:
             self.toolhead.manual_move(pos, CUR_LANE.extruder_obj.tool_unload_speed)
             self.toolhead.wait_moves()
         else:
-            while CUR_LANE.extruder_obj.tool_start_state:
+            while CUR_LANE.extruder_obj.get_toolhead_sensor_state():
                 num_tries += 1
                 if num_tries > self.tool_max_unload_attempts:
                     # Handle failure if the filament cannot be unloaded.
@@ -903,10 +910,7 @@ class afc:
         CUR_LANE.move(CUR_LANE.hub_obj.afc_bowden_length * -1, self.long_moves_speed, self.long_moves_accel, True)
 
         # Clear toolhead's loaded state for easier error handling later.
-        CUR_LANE.tool_loaded = False
-        CUR_LANE.extruder_obj.lane_loaded = ''
-        CUR_LANE.status = None
-        self.current = None
+        CUR_LANE.set_unloaded()
 
         self.save_vars()
 
@@ -1109,12 +1113,18 @@ class afc:
                     str["system"]["extruders"][key]['tool_start_sensor'] = True
             else:
                 str["system"]["extruders"][key]['tool_start_sensor'] = True == CUR_EXTRUDER.tool_start_state if CUR_EXTRUDER.tool_start is not None else False
+
             if CUR_EXTRUDER.tool_end is not None:
                 str["system"]["extruders"][key]['tool_end_sensor']   = True == CUR_EXTRUDER.tool_end_state
             else:
                 str["system"]["extruders"][key]['tool_end_sensor']   = None
-            str["system"]["extruders"][key]['buffer']   = CUR_EXTRUDER.buffer_name
-            str["system"]["extruders"][key]['buffer_status']   = CUR_EXTRUDER.buffer_status()
+
+            if CUR_EXTRUDER.lane_loaded:
+                str["system"]["extruders"][CUR_EXTRUDER]['buffer']           = self.lane_obj[CUR_EXTRUDER.lane_loaded].buffer_obj.name
+                str["system"]["extruders"][CUR_EXTRUDER]['buffer_status']    = self.lane_obj[CUR_EXTRUDER.lane_loaded].buffer_obj.buffer_status()
+            else:
+                str["system"]["extruders"][CUR_EXTRUDER]['buffer']           = "NONE"
+                str["system"]["extruders"][CUR_EXTRUDER]['buffer_status']    = "Not Loaded"
         return str
 
     def is_homed(self):

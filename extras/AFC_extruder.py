@@ -34,34 +34,35 @@ class AFCextruder:
 
         # RAMMING
         # Use buffer sensors for loading and unloading filament
-        if self.tool_start == "buffer":
-            self.r_enabled = False
-            b = config.getsection("AFC_buffer {}".format(self.buffer_name))
-            ap = b.get('advance_pin', None)
-            tp = b.get('trailing_pin', None)
-            if ap is not None and tp is not None:
-                self.r_enabled = True
-                self.advance_pin = ap
-                self.trailing_pin = tp
-                pins = ap.strip("!^"), tp.strip("!^")
-                for pin_desc in pins:
-                    ppins.allow_multi_use_pin(pin_desc)
+        # if self.tool_start == "buffer":
+        #     self.r_enabled = False
+        #     b = config.getsection("AFC_buffer {}".format(self.buffer_name))
+        #     ap = b.get('advance_pin', None)
+        #     tp = b.get('trailing_pin', None)
+        #     if ap is not None and tp is not None:
+        #         self.r_enabled = True
+        #         self.advance_pin = ap
+        #         self.trailing_pin = tp
+        #         pins = ap.strip("!^"), tp.strip("!^")
+        #         for pin_desc in pins:
+        #             ppins.allow_multi_use_pin(pin_desc)
 
-                if self.enable_sensors_in_gui:
-                    self.adv_filament_switch_name = "filament_switch_sensor {}_{}".format(self.buffer_name, "expanded")
-                    self.fila_avd = add_filament_switch(self.adv_filament_switch_name, ap, self.printer )
+        #         if self.enable_sensors_in_gui:
+        #             self.adv_filament_switch_name = "filament_switch_sensor {}_{}".format(self.buffer_name, "expanded")
+        #             self.fila_avd = add_filament_switch(self.adv_filament_switch_name, ap, self.printer )
 
-                    self.trail_filament_switch_name = "filament_switch_sensor {}_{}".format(self.buffer_name, "compressed")
-                    self.fila_trail = add_filament_switch(self.trail_filament_switch_name, tp, self.printer )
-            else:
-                self.gcode.respond_info("advance_pin and trailing_pin must be defined to enable ram sensor")
+        #             self.trail_filament_switch_name = "filament_switch_sensor {}_{}".format(self.buffer_name, "compressed")
+        #             self.fila_trail = add_filament_switch(self.trail_filament_switch_name, tp, self.printer )
+        #     else:
+        #         self.gcode.respond_info("advance_pin and trailing_pin must be defined to enable ram sensor")
 
         if self.tool_start is not None:
-            if self.tool_start == "buffer" and self.r_enabled == True:
-                self.tool_start_state = False
-                self.buffer_trailing = False
-                buttons.register_buttons([self.advance_pin], self.tool_start_callback)
-                buttons.register_buttons([self.trailing_pin], self.buffer_trailing_callback)
+            if self.tool_start == "buffer":# and self.r_enabled == True:
+                self.gcode.respond_info("Setting up as buffer")
+                # self.tool_start_state = False
+                # self.buffer_trailing = False
+                # buttons.register_buttons([self.advance_pin], self.tool_start_callback)
+                # buttons.register_buttons([self.trailing_pin], self.buffer_trailing_callback)
             else:
                 self.tool_start_state = False
                 buttons.register_buttons([self.tool_start], self.tool_start_callback)
@@ -90,19 +91,19 @@ class AFCextruder:
         self.AFC.extruders[self.name] = self
         self.get_buffer()
 
-    def get_buffer(self):
-      """
-      Retrieve the buffer object associated with the current buffer name.
-      If `buffer_name` is set, this method assigns the buffer object to `self.buffer`
-      by looking it up using the printer's AFC buffer system.
-      """
-      if self.buffer_name is not None:
-          self.buffer = self.printer.lookup_object('AFC_buffer ' + self.buffer_name)
+    # def get_buffer(self):
+    #   """
+    #   Retrieve the buffer object associated with the current buffer name.
+    #   If `buffer_name` is set, this method assigns the buffer object to `self.buffer`
+    #   by looking it up using the printer's AFC buffer system.
+    #   """
+    #   if self.buffer_name is not None:
+    #       self.buffer = self.printer.lookup_object('AFC_buffer ' + self.buffer_name)
 
     def tool_start_callback(self, eventtime, state):
         self.tool_start_state = state
-    def buffer_trailing_callback(self, eventtime, state):
-        self.buffer_trailing = state
+    # def buffer_trailing_callback(self, eventtime, state):
+    #     self.buffer_trailing = state
     def tool_end_callback(self, eventtime, state):
         self.tool_end_state = state
 

@@ -68,8 +68,9 @@ class AFCExtruderStepper:
         self.weight = None
         self.runout_lane = 'NONE'
         self.status = 'Not Loaded'
-        self.extruder_temp = None               # Extruder temp based off material
-        self.unit_obj = None                # Set on unit_name:connect callback
+        self.extruder_temp = None                                                                   # Extruder temp based off material
+        self.unit_obj = None                                                                        # Set on unit_name:connect callback
+
         unit = config.get('unit', None)                                                             # Unit name(AFC_hub) that this lane belongs to.
         if unit != None:
             self.unit = unit.split(':')[0]
@@ -133,6 +134,9 @@ class AFCExtruderStepper:
         self.fwd_speed_multi = config.getfloat("fwd_speed_multiplier", 0.5)                         # Multiplier to apply to rpm
         self.diameter_range = self.outer_diameter - self.inner_diameter  # Range for effective diameter
 
+        # Overrides buffers set at the unit and extruder level
+        self.buffer_name = config.get("buffer_name", None)
+
         # Set hub loading speed depending on distance between extruder and hub
         self.dist_hub_move_speed = self.AFC.long_moves_speed if self.dist_hub >= 200 else self.AFC.short_moves_speed
         self.dist_hub_move_accel = self.AFC.long_moves_accel if self.dist_hub >= 200 else self.AFC.short_moves_accel
@@ -164,6 +168,7 @@ class AFCExtruderStepper:
         """
         # Saving reference to unit
         self.unit_obj = unit_obj
+        self.buffer_obj = self.unit_obj.buffer_obj
 
         # Registering lane name in unit
         self.unit_obj.lanes[self.name] = self
@@ -173,6 +178,7 @@ class AFCExtruderStepper:
         if self.hub is None:
             self.hub_obj = self.unit_obj.hub_array[list(self.unit_obj.hub_array)[0]]
         else:
+            # TODO: manually lookup hub object
             self.hub_obj = self.unit_obj.hub_array[self.hub]
 
         try:
@@ -185,6 +191,18 @@ class AFCExtruderStepper:
             error_string = 'Error: No config found for extruder: {extruder} in [AFC_stepper {stepper}]. Please make sure [AFC_extruder {extruder}] section exists in your config'.format(
                 extruder=self.extruder_name, stepper=self.name )
             raise error(error_string)
+
+        # Use buffer defined in stepper and override buffers that maybe set at the UNIT or extruder levels
+        if self.buffer_name is not None:
+            self.buffer_obj = self.printer.lookup_object("AFC_buffer {}".format(self.buffer_name))
+        # Checking if buffer was defined in extruder if not defined in unit/hub
+        elif self.buffer_obj is None and self.extruder_obj.tool_start == "buffer":
+            if self.extruder_obj.buffer_name is not None:
+                self.AFC.gcode.respond_info("test")
+                self.buffer_obj = self.printer.lookup_object("AFC_buffer {}".format(self.extruder_obj.buffer_name))
+
+        self.AFC.gcode.respond_info("{} Buffer Obj: {}".format(self.name, self.buffer_obj))
+
         self.restore_prev_state()
         
         # Send out event so that macros and be registered properly with valid lane names
@@ -218,6 +236,11 @@ class AFCExtruderStepper:
         self.tool_loaded = l['tool_loaded']
         self.status = l['status']
 
+    def get_toolhead_sensor_state(self):
+        if self.extruder_obj.tool_start == "buffer":
+            return self.buffer_obj.advance_state
+        else:
+            return self.extruder_obj.tool_start_state
 
     def _get_tmc_values(self, config):
         """
@@ -492,6 +515,50 @@ class AFCExtruderStepper:
 
         if self.remaining_weight < self.empty_spool_weight:
             self.remaining_weight = self.empty_spool_weight  # Ensure weight doesn't drop below empty spool weight
+    
+    def set_loaded(self):
+        self.tool_loaded = True
+        self.AFC.current = self.extruder_obj.lane_loaded = self.name
+        self.status = 'Tooled'
+        self.AFC.SPOOL.set_active_spool(self.spool_id)
+
+    def set_unloaded(self):
+        self.tool_loaded = False
+        self.extruder_obj.lane_loaded = ""
+        self.status = None
+        self.AFC.current = None
+
+    def enable_buffer(self):
+      """
+      Enable the buffer if `buffer_name` is set.
+      Retrieves the buffer object and calls its `enable_buffer()` method to activate it.
+      """
+      if self.buffer_obj is not None:
+         self.buffer_obj.enable_buffer()
+
+    def disable_buffer(self):
+       """
+       Disable the buffer if `buffer_name` is set.
+       Calls the buffer's `disable_buffer()` method to deactivate it.
+       """
+       if self.buffer_obj is not None:
+          self.buffer_obj.disable_buffer()
+
+    def buffer_status(self):
+       """
+       Retrieve the current status of the buffer.
+       If `buffer_name` is set, returns the buffer's status using `buffer_status()`.
+       Otherwise, returns None.
+       """
+       if self.buffer_obj is not None:
+          return self.buffer_obj.buffer_status()
+
+       else: return None
+
+    def get_trailing(self):
+        if self.buffer_obj is not None:
+            return self.buffer_obj.trailing_state
+        else: return None
 
 def load_config_prefix(config):
     return AFCExtruderStepper(config)

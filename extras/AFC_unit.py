@@ -8,8 +8,12 @@ class afcUnit:
         self.name       = self.full_name[-1]
         self.hub        = config.getlists("hub", None)
         self.extruder   = config.get("extruder")
+        self.buffer_name    = config.get('buffer', None)
 
         self.lanes      = {}
+
+        # Objects
+        self.buffer_obj = None
 
         self.printer.register_event_handler("klippy:connect", self.handle_connect)
 
@@ -34,6 +38,11 @@ class afcUnit:
             error_string = 'Error: No config found for extruder: {extruder} in [AFC_unit {unit}]. Please make sure [AFC_extruder {extruder}] section exists in your config'.format(
                             extruder=self.extruder, unit=self.name )
             raise error( error_string )
+
+        if self.buffer_name is not None:
+            self.buffer_obj = self.printer.lookup_object('AFC_buffer {}'.format(self.buffer_name))
+
+        self.AFC.gcode.respond_info("AFC_{}:ready".format(self.name))
 
         # Send out event so lanes can store units object
         self.printer.send_event("{}:connect".format(self.name), self)
@@ -74,7 +83,7 @@ class afcUnit:
                 msg +="<span class=success--text> AND LOADED</span>"
 
                 if CUR_LANE.tool_loaded:
-                    if CUR_LANE.extruder_obj.tool_start_state == True or CUR_LANE.extruder_obj.tool_start == "buffer":
+                    if CUR_LANE.get_toolhead_sensor_state() == True or CUR_LANE.extruder_obj.tool_start == "buffer":
                         if CUR_LANE.extruder_obj.lane_loaded == CUR_LANE.name:
                             CUR_LANE.sync_to_extruder()
                             msg +="<span class=primary--text> in ToolHead</span>"
@@ -88,7 +97,7 @@ class afcUnit:
                                 CUR_LANE.extruder_obj.enable_buffer()
                                 CUR_LANE.extruder_obj.lane_loaded = CUR_LANE.name
                         else:
-                            if CUR_LANE.extruder_obj.tool_start_state == True:
+                            if CUR_LANE.get_toolhead_sensor_state() == True:
                                 msg +="<span class=error--text> error in ToolHead. \nLane identified as loaded in AFC.vars.unit file\n but not identified as loaded in AFC.var.tool file</span>"
                                 succeeded = False
                     else:
