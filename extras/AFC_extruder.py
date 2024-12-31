@@ -46,7 +46,7 @@ class AFCextruder:
         #         pins = ap.strip("!^"), tp.strip("!^")
         #         for pin_desc in pins:
         #             ppins.allow_multi_use_pin(pin_desc)
-
+                # TODO move to buffer
         #         if self.enable_sensors_in_gui:
         #             self.adv_filament_switch_name = "filament_switch_sensor {}_{}".format(self.buffer_name, "expanded")
         #             self.fila_avd = add_filament_switch(self.adv_filament_switch_name, ap, self.printer )
@@ -89,50 +89,12 @@ class AFCextruder:
         if self.name in self.AFC.extruders_f:
             self.lane_loaded = self.AFC.extruders_f[self.name]['lane_loaded']
         self.AFC.extruders[self.name] = self
-        # self.get_buffer()
-
-    # def get_buffer(self):
-    #   """
-    #   Retrieve the buffer object associated with the current buffer name.
-    #   If `buffer_name` is set, this method assigns the buffer object to `self.buffer`
-    #   by looking it up using the printer's AFC buffer system.
-    #   """
-    #   if self.buffer_name is not None:
-    #       self.buffer = self.printer.lookup_object('AFC_buffer ' + self.buffer_name)
 
     def tool_start_callback(self, eventtime, state):
         self.tool_start_state = state
-    # def buffer_trailing_callback(self, eventtime, state):
-    #     self.buffer_trailing = state
+
     def tool_end_callback(self, eventtime, state):
         self.tool_end_state = state
-
-    # def enable_buffer(self):
-    #   """
-    #   Enable the buffer if `buffer_name` is set.
-    #   Retrieves the buffer object and calls its `enable_buffer()` method to activate it.
-    #   """
-    #   if self.buffer_name is not None:
-    #      self.buffer.enable_buffer()
-
-    # def disable_buffer(self):
-    #    """
-    #    Disable the buffer if `buffer_name` is set.
-    #    Calls the buffer's `disable_buffer()` method to deactivate it.
-    #    """
-    #    if self.buffer_name is not None:
-    #       self.buffer.disable_buffer()
-
-    # def buffer_status(self):
-    #    """
-    #    Retrieve the current status of the buffer.
-    #    If `buffer_name` is set, returns the buffer's status using `buffer_status()`.
-    #    Otherwise, returns None.
-    #    """
-    #    if self.buffer_name is not None:
-    #       return self.buffer.buffer_status()
-
-    #    else: return None
 
 def load_config_prefix(config):
     return AFCextruder(config)
