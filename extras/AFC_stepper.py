@@ -180,6 +180,7 @@ class AFCExtruderStepper:
                 self.extruder_obj = self.printer.lookup_object('AFC_extruder {}'.format(self.extruder_name))
             else:
                 self.extruder_obj = self.unit_obj.extruder_obj
+            self.extruder_name = self.extruder_obj.name
         except:
             error_string = 'Error: No config found for extruder: {extruder} in [AFC_stepper {stepper}]. Please make sure [AFC_extruder {extruder}] section exists in your config'.format(
                 extruder=self.extruder_name, stepper=self.name )
