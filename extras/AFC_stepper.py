@@ -357,7 +357,8 @@ class AFCExtruderStepper:
         # Checking to make sure printer is ready and making sure PREP has been called before trying to load anything
         if self.printer.state_message == 'Printer is ready' and True == self._afc_prep_done:
             led = self.led_index
-            if self.prep_state == True:
+            # Only try to load when load state trigger is false
+            if self.prep_state == True and self.load_state == False:
                 x = 0
                 # Check to see if the printer is printing or moving as trying to load while printer is doing something will crash klipper
                 if self.AFC.is_printing():
