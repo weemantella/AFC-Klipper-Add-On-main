@@ -378,7 +378,7 @@ class AFCExtruderStepper:
                 self.status=''
 
                 # Checking if loaded to hub(it should not be since filament was just inserted), if false load to hub. Does a fast load if hub distance is over 200mm
-                if not self.loaded_to_hub:
+                if not self.loaded_to_hub and self.load_state and self.prep_state:
                     self.move(self.dist_hub, self.dist_hub_move_speed, self.dist_hub_move_accel, self.dist_hub > 200)
                     self.loaded_to_hub = True
 
@@ -391,13 +391,22 @@ class AFCExtruderStepper:
                 # Checking to make sure runout_lane is set and does not equal 'NONE'
                 if  self.runout_lane != 'NONE':
                     self.status = None
-                    self.AFC.afc_led(self.AFC.led_not_ready, led)
-                    self.AFC.gcode.respond_info("Infinite Spool triggered for {}".format(self.name))
+                    self.AFC.gcode.respond_info("Infinite Spool triggered for {}, PAUSING and changing to runout lane {}".format(self.name.upper(), self.runout_lane.upper()))
                     empty_LANE = self.AFC.stepper[self.AFC.current]
                     change_LANE = self.AFC.stepper[self.runout_lane]
+
+                    # Pause printer
+                    self.gcode.run_script_from_command("PAUSE")
+                    # Command T(n)
                     self.gcode.run_script_from_command(change_LANE.map)
-                    self.gcode.run_script_from_command('SET_MAP LANE=' + change_LANE.name + ' MAP=' + empty_LANE.map)
-                    self.gcode.run_script_from_command('LANE_UNLOAD LANE=' + empty_LANE.name)
+                    # Change Mapping
+                    self.gcode.run_script_from_command('SET_MAP LANE={} MAP={}'.format(change_LANE.name, empty_LANE.map))
+                    # Eject lane from BT
+                    self.gcode.run_script_from_command('LANE_UNLOAD LANE={}'.format(empty_LANE.name))
+                    # Resume
+                    self.gcode.run_script_from_command("RESUME")
+                    # Set LED to not ready
+                    self.AFC.afc_led(self.AFC.led_not_ready, led)
                 else:
                     # Pause print
                     self.status = None
