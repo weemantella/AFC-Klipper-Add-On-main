@@ -295,7 +295,7 @@ class afcSpool:
         """
         t_index = 0
         for key, unit in self.AFC.units.items():
-            for lane in unit:
+            for lane in unit.lanes:
                 map_cmd = "T{}".format(t_index)
                 self.AFC.tool_cmds[map_cmd] = lane
                 self.AFC.stepper[lane].map = map_cmd
