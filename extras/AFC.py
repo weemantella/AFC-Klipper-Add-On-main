@@ -695,7 +695,7 @@ class afc:
             # Ensure filament reaches the toolhead.
             tool_attempts = 0
             if CUR_LANE.extruder_obj.tool_start:
-                while not CUR_LANE.extruder_obj.get_toolhead_sensor_state():
+                while not CUR_LANE.get_toolhead_sensor_state():
                     tool_attempts += 1
                     CUR_LANE.move(self.short_move_dis, CUR_LANE.extruder_obj.tool_load_speed, self.long_moves_accel)
                     if tool_attempts > 20:
@@ -720,7 +720,7 @@ class afc:
             if CUR_LANE.extruder_obj.tool_start == "buffer":
                 CUR_LANE.unsync_to_extruder()
                 load_checks = 0
-                while CUR_LANE.extruder_obj.get_toolhead_sensor_state() == True:
+                while CUR_LANE.get_toolhead_sensor_state() == True:
                     CUR_LANE.move( self.short_move_dis * -1, self.short_moves_speed, self.short_moves_accel )
                     load_checks += 1
                     self.reactor.pause(self.reactor.monotonic() + 0.1)
@@ -885,7 +885,7 @@ class afc:
             self.toolhead.manual_move(pos, CUR_LANE.extruder_obj.tool_unload_speed)
             self.toolhead.wait_moves()
         else:
-            while CUR_LANE.extruder_obj.get_toolhead_sensor_state():
+            while CUR_LANE.get_toolhead_sensor_state():
                 num_tries += 1
                 if num_tries > self.tool_max_unload_attempts:
                     # Handle failure if the filament cannot be unloaded.
