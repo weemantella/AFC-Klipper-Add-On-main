@@ -978,7 +978,7 @@ class afc:
             self.ERROR.AFC_error("Please home printer before doing a tool change", False)
             return
 
-        tmp = gcmd.get_commandline().split()[0]
+        tmp = gcmd.get_commandline()
         cmd = tmp.upper()
         Tcmd = ''
         if 'LANE' in cmd:
@@ -988,7 +988,7 @@ class afc:
                     Tcmd = key
                     break
         else:
-            Tcmd = cmd
+            Tcmd = cmd.split()[0]
 
         if Tcmd == '':
             self.gcode.respond_info("I did not understand the change -- " +cmd)
@@ -1088,11 +1088,13 @@ class afc:
                 str[UNIT][NAME]['filament_status']=filiment_stat[0]
                 str[UNIT][NAME]['filament_status_led']=filiment_stat[1]
                 str[UNIT][NAME]['status'] = CUR_LANE.status if CUR_LANE.status is not None else ''
+                str[UNIT][NAME]['dist_hub'] = CUR_LANE.dist_hub
                 numoflanes +=1
             str[UNIT]['system']={}
             str[UNIT]['system']['type'] = self.printer.lookup_object('AFC_hub '+ UNIT).unit.name
             str[UNIT]['system']['hub_loaded']  = True == self.printer.lookup_object('AFC_hub '+ UNIT).state
             str[UNIT]['system']['can_cut']  = True == self.printer.lookup_object('AFC_hub '+ UNIT).cut
+            str[UNIT]['system']['afc_bowden_length'] = self.printer.lookup_object('AFC_hub '+ UNIT).afc_bowden_length
             str[UNIT]['system']['screen'] = screen_mac
 
         str["system"]={}

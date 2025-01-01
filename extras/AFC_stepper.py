@@ -192,6 +192,16 @@ class AFCExtruderStepper:
                 extruder=self.extruder_name, stepper=self.name )
             raise error(error_string)
 
+        try:
+            saved_variables = self.printer.lookup_object("save_variables", None)
+            variable_name = "afc_cal_{}_{}".format(self.name, "dist_hub")
+            if saved_variables and variable_name in saved_variables.allVariables:
+                self.dist_hub = saved_variables.allVariables[variable_name]
+                self.AFC.gcode.respond_info("Using dist_hub saved value({}) for AFC_stepper {}".format(self.dist_hub, self.name))
+        except:
+            self.AFC.ERROR.AFC_error("Problem looking up extruder saved variables", False)
+
+
         # Use buffer defined in stepper and override buffers that maybe set at the UNIT or extruder levels
         if self.buffer_name is not None:
             self.buffer_obj = self.printer.lookup_object("AFC_buffer {}".format(self.buffer_name))
