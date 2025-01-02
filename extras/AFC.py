@@ -255,7 +255,7 @@ class afc:
                 if CUR_LANE.extruder_obj.tool_start_state == True:
                     extruder_msg = '  Tool: <span class=success--text><-></span>'
             else:
-                if CUR_LANE.lane_loaded and CUR_LANE.extruder_obj.lane_loaded in self.units[UNIT]:
+                if CUR_LANE.tool_loaded and CUR_LANE.extruder_obj.lane_loaded in self.units[UNIT]:
                     if CUR_LANE.get_toolhead_sensor_state() == True:
                         extruder_msg = '  Tool: <span class=success--text><-></span>'
 
