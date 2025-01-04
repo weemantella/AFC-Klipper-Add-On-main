@@ -79,8 +79,8 @@ class AFCtrigger:
             raise error( msg )
 
         self.printer.register_event_handler("klippy:ready", self._handle_ready)
-        self.gcode.register_mux_command("QUERY_BUFFER", "BUFFER", self.name, self.cmd_QUERY_BUFFER, desc=self.cmd_QUERY_BUFFER_help)
-        self.gcode.register_mux_command("SET_BUFFER_VELOCITY", "BUFFER", self.name, self.cmd_SET_BUFFER_VELOCITY, desc=self.cmd_SET_BUFFER_VELOCITY_help)
+        self.gcode.register_mux_command("QUERY_BUFFER",         "BUFFER", self.name, self.cmd_QUERY_BUFFER,         desc=self.cmd_QUERY_BUFFER_help)
+        self.gcode.register_mux_command("SET_BUFFER_VELOCITY",  "BUFFER", self.name, self.cmd_SET_BUFFER_VELOCITY,  desc=self.cmd_SET_BUFFER_VELOCITY_help)
 
         # Belay Buffer
         if self.belay:
@@ -91,13 +91,9 @@ class AFCtrigger:
             self.buttons.register_buttons([self.advance_pin], self.advance_callback)
             self.buttons.register_buttons([self.trailing_pin], self.trailing_callback)
 
-            # TODO: Commenting these out as the functions will have to be rewritten since having more than one buffer would break these
-            #       functions
-            # try:
-            #     self.gcode.register_mux_command("SET_ROTATION_FACTOR", "AFC_trigger", None, self.cmd_SET_ROTATION_FACTOR, desc=self.cmd_LANE_ROT_FACTOR_help)
-            #     self.gcode.register_mux_command("SET_BUFFER_MULTIPLIER", "AFC_trigger", None, self.cmd_SET_MULTIPLIER, desc=self.cmd_SET_MULTIPLIER_help)
-            # except:
-            #     pass
+
+            self.gcode.register_mux_command("SET_ROTATION_FACTOR",      "BUFFER", self.name, self.cmd_SET_ROTATION_FACTOR,  desc=self.cmd_LANE_ROT_FACTOR_help)
+            self.gcode.register_mux_command("SET_BUFFER_MULTIPLIER",    "BUFFER", self.name, self.cmd_SET_MULTIPLIER,       desc=self.cmd_SET_MULTIPLIER_help)
 
     def _handle_ready(self):
         self.min_event_systime = self.reactor.monotonic() + 2.
@@ -338,6 +334,7 @@ class AFCtrigger:
             - Setting value to zero disables forward assist during printing.
             - Velocity is not saved to configuration file, needs to be manually updated.
         """
+
         old_velocity = self.velocity
         self.velocity = gcmd.get_float('VELOCITY', 0.0)
         self.gcode.respond_info("VELOCITY for {} was updated from {} to {}".format(self.name, old_velocity, self.velocity))

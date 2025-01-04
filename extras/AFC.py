@@ -1091,7 +1091,7 @@ class afc:
                 str[UNIT][NAME]['dist_hub'] = CUR_LANE.dist_hub
                 numoflanes +=1
             str[UNIT]['system']={}
-            str[UNIT]['system']['type'] = self.printer.lookup_object('AFC_hub '+ UNIT).unit.name
+            str[UNIT]['system']['type'] = self.printer.lookup_object('AFC_hub '+ UNIT).unit.type
             str[UNIT]['system']['hub_loaded']  = True == self.printer.lookup_object('AFC_hub '+ UNIT).state
             str[UNIT]['system']['can_cut']  = True == self.printer.lookup_object('AFC_hub '+ UNIT).cut
             str[UNIT]['system']['afc_bowden_length'] = self.printer.lookup_object('AFC_hub '+ UNIT).afc_bowden_length
