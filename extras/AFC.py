@@ -614,14 +614,12 @@ class afc:
         extruder = self.toolhead.get_extruder()
         self.heater = extruder.get_heater()
 
-        # Heat the extruder if it is below the minimum extrusion temperature.
-        if not self.heater.can_extrude:
-            pheaters = self.printer.lookup_object('heaters')
-            target_temp = self._get_default_material_temps(CUR_LANE)
+        pheaters = self.printer.lookup_object('heaters')
+        target_temp = self._get_default_material_temps(CUR_LANE)
 
-            if self.heater.target_temp <= target_temp:
-                self.gcode.respond_info('Extruder below min_extrude_temp, heating to {} degrees.'.format(target_temp))
-                pheaters.set_temperature(extruder.get_heater(), target_temp, wait=True)
+        if self.heater.target_temp <= target_temp:
+            self.gcode.respond_info('Extruder below min_extrude_temp or below temp for specified filament, heating to {} degrees.'.format(target_temp))
+            pheaters.set_temperature(extruder.get_heater(), target_temp, wait=True)
 
 
     def TOOL_LOAD(self, CUR_LANE):

@@ -417,6 +417,7 @@ class AFCExtruderStepper:
             else:
                 self.status = None
                 self.AFC.afc_led(self.AFC.led_not_ready, led)
+        self.AFC.save_vars()
 
     def do_enable(self, enable):
         self.sync_print_time()
