@@ -226,7 +226,7 @@ class afc:
                 lane_msg = ''
                 if self.current != None:
                     if self.current == CUR_LANE.name:
-                        if not CUR_LANE.get_toolhead_sensor_state() or not CUR_LANE.hub_obj.state:
+                        if not CUR_LANE.get_toolhead_sensor_state() or not CUR_LANE.check_hub_present():
                             lane_msg += '<span class=warning--text>{:<{}} </span>'.format(CUR_LANE.name.upper(), max_lane_length)
                         else:
                             lane_msg += '<span class=success--text>{:<{}} </span>'.format(CUR_LANE.name.upper(), max_lane_length)
@@ -245,7 +245,7 @@ class afc:
                     lane_msg += '  <span class=error--text>xx</span>  |\n'
                 status_msg += lane_msg
 
-            if CUR_LANE.hub_obj.state == True:
+            if CUR_LANE.check_hub_present() == True:
                 status_msg += 'HUB: <span class=success--text><-></span>'
             else:
                 status_msg += 'HUB: <span class=error--text>x</span>'
@@ -507,13 +507,13 @@ class afc:
         if CUR_LANE.load_state == False:
             CUR_LANE.do_enable(True)
             while CUR_LANE.load_state == False:
-                CUR_LANE.move( CUR_LANE.hub_obj.move_dis, self.short_moves_speed, self.short_moves_accel)
+                CUR_LANE.move( CUR_LANE.move_dis, self.short_moves_speed, self.short_moves_accel)
         if CUR_LANE.loaded_to_hub == False:
             CUR_LANE.move(CUR_LANE.dist_hub, CUR_LANE.dist_hub_move_speed, CUR_LANE.dist_hub_move_accel, True if CUR_LANE.dist_hub > 200 else False)
-        while CUR_LANE.hub_obj.state == False:
-            CUR_LANE.move(CUR_LANE.hub_obj.move_dis, self.short_moves_speed, self.short_moves_accel)
-        while CUR_LANE.hub_obj.state == True:
-            CUR_LANE.move(CUR_LANE.hub_obj.move_dis * -1, self.short_moves_speed, self.short_moves_accel)
+        while CUR_LANE.check_hub_present() == False:
+            CUR_LANE.move(CUR_LANE.move_dis, self.short_moves_speed, self.short_moves_accel)
+        while CUR_LANE.check_hub_present() == True:
+            CUR_LANE.move(CUR_LANE.move_dis * -1, self.short_moves_speed, self.short_moves_accel)
         CUR_LANE.status = ''
         self.save_vars()
         CUR_LANE.do_enable(False)
@@ -553,8 +553,8 @@ class afc:
                 CUR_LANE.move(CUR_LANE.dist_hub * -1, CUR_LANE.dist_hub_move_speed, CUR_LANE.dist_hub_move_accel, True if CUR_LANE.dist_hub > 200 else False)
             CUR_LANE.loaded_to_hub = False
             while CUR_LANE.load_state == True:
-               CUR_LANE.move( CUR_LANE.hub_obj.move_dis * -1, self.short_moves_speed, self.short_moves_accel, True)
-            CUR_LANE.move( CUR_LANE.hub_obj.move_dis * -5, self.short_moves_speed, self.short_moves_accel)
+               CUR_LANE.move( CUR_LANE.move_dis * -1, self.short_moves_speed, self.short_moves_accel, True)
+            CUR_LANE.move( CUR_LANE.move_dis * -1, self.short_moves_speed, self.short_moves_accel)
             CUR_LANE.do_enable(False)
             CUR_LANE.status = ''
             self.save_vars()
@@ -661,7 +661,7 @@ class afc:
         self.afc_led(self.led_loading, CUR_LANE.led_index)
 
         # Check if the lane is in a state ready to load and hub is clear.
-        if CUR_LANE.load_state and not CUR_LANE.hub_obj.state:
+        if CUR_LANE.load_state and not CUR_LANE.check_hub_clear():
             
             self._check_extruder_temp(CUR_LANE)
 
@@ -676,9 +676,9 @@ class afc:
             hub_attempts = 0
 
             # Ensure filament moves past the hub.
-            while not CUR_LANE.hub_obj.state:
+            while not CUR_LANE.check_hub_present():
                 if hub_attempts == 0:
-                    CUR_LANE.move(CUR_LANE.hub_obj.move_dis, self.short_moves_speed, self.short_moves_accel)
+                    CUR_LANE.move(CUR_LANE.move_dis, self.short_moves_speed, self.short_moves_accel)
                 else:
                     CUR_LANE.move(self.short_move_dis, self.short_moves_speed, self.short_moves_accel)
                 hub_attempts += 1
@@ -688,7 +688,7 @@ class afc:
                     return False
 
             # Move filament towards the toolhead.
-            CUR_LANE.move(CUR_LANE.hub_obj.afc_bowden_length, self.long_moves_speed, self.long_moves_accel, True)
+            CUR_LANE.move(CUR_LANE.afc_bowden_length, self.long_moves_speed, self.long_moves_accel, True)
 
             # Ensure filament reaches the toolhead.
             tool_attempts = 0
@@ -751,7 +751,7 @@ class afc:
             self.save_vars()
         else:
             # Handle errors if the hub is not clear or the lane is not ready for loading.
-            if CUR_LANE.hub_obj.state:
+            if CUR_LANE.check_hub_clear():
                 message = ('HUB NOT CLEAR WHEN TRYING TO LOAD\n||-----||----|x|-----||\nTRG   LOAD   HUB   TOOL')
                 self.ERROR.handle_lane_failure(CUR_LANE, message)
                 return False
@@ -905,7 +905,7 @@ class afc:
 
         # Synchronize and move filament out of the hub.
         CUR_LANE.unsync_to_extruder()
-        CUR_LANE.move(CUR_LANE.hub_obj.afc_bowden_length * -1, self.long_moves_speed, self.long_moves_accel, True)
+        # CUR_LANE.move(CUR_LANE.afc_bowden_length * -1, self.long_moves_speed, self.long_moves_accel, True)
 
         # Clear toolhead's loaded state for easier error handling later.
         CUR_LANE.set_unloaded()
@@ -914,34 +914,35 @@ class afc:
 
         # Ensure filament is fully cleared from the hub.
         num_tries = 0
-        while CUR_LANE.hub_obj.state:
+        while CUR_LANE.check_hub_clear():
             CUR_LANE.move(self.short_move_dis * -1, self.short_moves_speed, self.short_moves_accel, True)
             num_tries += 1
-            if num_tries > (CUR_LANE.hub_obj.afc_bowden_length / self.short_move_dis):
+            if num_tries > (CUR_LANE.afc_bowden_length / self.short_move_dis):
                 # Handle failure if the filament doesn't clear the hub.
                 message = 'HUB NOT CLEARING\n'
                 self.ERROR.handle_lane_failure(CUR_LANE, message)
                 return False
 
         #Move to make sure hub path is clear based on the move_clear_dis var
-        CUR_LANE.move( CUR_LANE.hub_obj.hub_clear_move_dis * -1, self.short_moves_speed, self.short_moves_accel, True)
+        CUR_LANE.move( CUR_LANE.hub_clear_move_dis * -1, self.short_moves_speed, self.short_moves_accel, True)
 
         # Cut filament at the hub, if configured.
-        if CUR_LANE.hub_obj.cut:
-            if CUR_LANE.hub_obj.cut_cmd == 'AFC':
-                CUR_LANE.hub_obj.hub_cut(CUR_LANE)
-            else:
-                self.gcode.run_script_from_command(CUR_LANE.hub_obj.cut_cmd)
+        if CUR_LANE.hub_obj is not None:
+            if CUR_LANE.hub_obj.cut:
+                if CUR_LANE.hub_obj.cut_cmd == 'AFC':
+                    CUR_LANE.hub_obj.hub_cut(CUR_LANE)
+                else:
+                    self.gcode.run_script_from_command(CUR_LANE.hub_obj.cut_cmd)
 
-            # Confirm the hub is clear after the cut.
-            while CUR_LANE.hub_obj.state:
-                CUR_LANE.move(self.short_move_dis * -1, self.short_moves_speed, self.short_moves_accel, True)
-                num_tries += 1
-                # TODO: Figure out max number of tries
-                if num_tries > (CUR_LANE.hub_obj.afc_bowden_length / self.short_move_dis):
-                    message = 'HUB NOT CLEARING after hub cut\n'
-                    self.ERROR.handle_lane_failure(CUR_LANE, message)
-                    return False
+                # Confirm the hub is clear after the cut.
+                while CUR_LANE.check_hub_clear():
+                    CUR_LANE.move(self.short_move_dis * -1, self.short_moves_speed, self.short_moves_accel, True)
+                    num_tries += 1
+                    # TODO: Figure out max number of tries
+                    if num_tries > (CUR_LANE.afc_bowden_length / self.short_move_dis):
+                        message = 'HUB NOT CLEARING after hub cut\n'
+                        self.ERROR.handle_lane_failure(CUR_LANE, message)
+                        return False
 
         # Finalize unloading and reset lane state.
         CUR_LANE.loaded_to_hub = True
@@ -1089,10 +1090,10 @@ class afc:
                 str[UNIT][NAME]['dist_hub'] = CUR_LANE.dist_hub
                 numoflanes +=1
             str[UNIT]['system']={}
-            str[UNIT]['system']['type'] = self.printer.lookup_object('AFC_hub '+ UNIT).unit.type
-            str[UNIT]['system']['hub_loaded']  = True == self.printer.lookup_object('AFC_hub '+ UNIT).state
-            str[UNIT]['system']['can_cut']  = True == self.printer.lookup_object('AFC_hub '+ UNIT).cut
-            str[UNIT]['system']['afc_bowden_length'] = self.printer.lookup_object('AFC_hub '+ UNIT).afc_bowden_length
+            # str[UNIT]['system']['type'] = self.printer.lookup_object('AFC_hub '+ UNIT).unit.type
+            # str[UNIT]['system']['hub_loaded']  = True == self.printer.lookup_object('AFC_hub '+ UNIT).state
+            # str[UNIT]['system']['can_cut']  = True == self.printer.lookup_object('AFC_hub '+ UNIT).cut
+            # str[UNIT]['system']['afc_bowden_length'] = self.printer.lookup_object('AFC_hub '+ UNIT).afc_bowden_length
             str[UNIT]['system']['screen'] = screen_mac
 
         str["system"]={}

@@ -22,15 +22,19 @@ class afcUnit:
         self.AFC.units[self.name] = self
 
         self.hub_array = {}
-        for hub in self.hub:
-            h = self.printer.lookup_object("AFC_hub {}".format(hub))
-            if h.unit is not None:
-                raise error("AFC_hub {} already has a unit {} assigned, can't assign {}. Only one unit can be assigned per AFC_hub".format(hub, " ".join(h.unit.full_name), " ".join(self.full_name)))
-            else:
-                # TODO: Not sure what I was thinking for this array stuff, maybe just make it a object and can override at stepper level
-                # Maybe this was done to force the user to input all the hubs that will be in this unit?
-                self.hub_array[hub] = h
-                self.hub_array[hub].unit = self
+        if self.hub is not None:
+            for hub in self.hub:
+                h = self.printer.lookup_object("AFC_hub {}".format(hub))
+                if h.unit is not None:
+                    raise error("AFC_hub {} already has a unit {} assigned, can't assign {}. Only one unit can be assigned per AFC_hub".format(hub, " ".join(h.unit.full_name), " ".join(self.full_name)))
+                else:
+                    # TODO: Not sure what I was thinking for this array stuff, maybe just make it a object and can override at stepper level
+                    # Maybe this was done to force the user to input all the hubs that will be in this unit?
+                    self.hub_array[hub] = h
+                    self.hub_array[hub].unit = self
+        else:
+            self.hub_array['hub'] = None
+            # self.hub_array[].unit = None
 
         try:
             self.extruder_obj = self.printer.lookup_object("AFC_extruder {}".format(self.extruder))

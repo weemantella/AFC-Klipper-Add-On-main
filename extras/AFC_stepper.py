@@ -93,9 +93,13 @@ class AFCExtruderStepper:
             ffi_lib.cartesian_stepper_alloc(b'x'), ffi_lib.free)
         self.assist_activate=False
 
-        self.dist_hub = config.getfloat('dist_hub', 60)                                             # Bowden distance between Boxturtle extruder and hub
-        self.park_dist = config.getfloat('park_dist', 10)                                           # Currently unused
-        self.led_index = config.get('led_index', None)                                              # LED index of lane in chain of lane LEDs
+        self.afc_bowden_length  = config.getfloat('afc_bowden_length', None)                        # Bowden distance between hub and primary extruder
+        self.dist_hub           = config.getfloat('dist_hub', 60)                                   # Bowden distance between Boxturtle extruder and hub
+        self.hub_clear_move_dis = config.getfloat("hub_clear_move_dis", None)                       # Distance to insure filament is clear of hub
+        self.move_dis           = config.getfloat('move_dis', None)                                 # Distance to move through hub
+        self.park_dist          = config.getfloat('park_dist', 10)                                  # Currently unused
+        self.led_index          = config.get('led_index', None)                                     # LED index of lane in chain of lane LEDs
+
         # lane triggers
         buttons = self.printer.load_object(config, "buttons")
         self.prep = config.get('prep', None)                                                        # MCU pin for prep trigger
@@ -106,6 +110,7 @@ class AFCExtruderStepper:
         if self.load is not None:
             self.load_state = False
             buttons.register_buttons([self.load], self.load_callback)
+
         # Respoolers
         self.afc_motor_rwd = config.get('afc_motor_rwd', None)                                      # Reverse pin on MCU for spoolers
         self.afc_motor_fwd = config.get('afc_motor_fwd', None)                                      # Forwards pin on MCU for spoolers
@@ -180,6 +185,21 @@ class AFCExtruderStepper:
         else:
             # TODO: manually lookup hub object
             self.hub_obj = self.unit_obj.hub_array[self.hub]
+
+        if self.afc_bowden_length is None:
+            self.afc_bowden_length = self.hub_obj.afc_bowden_length
+        # else:
+        #     self.afc_bowden_length = 900           # default value if no hub
+
+        if self.move_dis is None:
+            self.move_dis = self.hub_obj.move_dis
+        # else:
+        #     self.move_dis = 50                     # default value if no hub
+
+        if self.hub_clear_move_dis is None:
+            self.hub_clear_move_dis = self.hub_obj.hub_clear_move_dis
+        # else:
+        #     self.hub_clear_move_dis = 15           # default value if no hub
 
         try:
             if self.extruder_name is not None:
@@ -382,6 +402,8 @@ class AFCExtruderStepper:
                 if not self.loaded_to_hub and self.load_state and self.prep_state:
                     self.move(self.dist_hub, self.dist_hub_move_speed, self.dist_hub_move_accel, self.dist_hub > 200)
                     self.loaded_to_hub = True
+                    if self.get_advancing():
+                        self.move(self.AFC.short_move_dis * -1, self.AFC.short_moves_speed, self.AFC.short_moves_accel, True)
 
                 self.do_enable(False)
                 if self.load_state == True and self.prep_state == True:
@@ -536,7 +558,23 @@ class AFCExtruderStepper:
 
         if self.remaining_weight < self.empty_spool_weight:
             self.remaining_weight = self.empty_spool_weight  # Ensure weight doesn't drop below empty spool weight
-    
+
+    def check_hub_clear(self):
+        if self.hub_obj is not None:
+            self.AFC.gcode.respond_info('hub {} found'.format(self.hub_obj))
+            return self.hub_obj.state
+        else:
+            self.AFC.gcode.respond_info('No hub move on')
+            return False
+
+    def check_hub_present(self):
+        if self.hub_obj is not None:
+            self.AFC.gcode.respond_info('hub {} found'.format(self.hub_obj))
+            return self.hub_obj.state
+        else:
+            self.AFC.gcode.respond_info('No hub move on hub: {}'.format(self.hub_obj))
+            return True
+
     def set_loaded(self):
         self.tool_loaded = True
         self.AFC.current = self.extruder_obj.lane_loaded = self.name
@@ -579,6 +617,11 @@ class AFCExtruderStepper:
     def get_trailing(self):
         if self.buffer_obj is not None:
             return self.buffer_obj.trailing_state
+        else: return None
+
+    def get_advancing(self):
+        if self.buffer_obj is not None:
+            return self.buffer_obj.advance_state
         else: return None
 
 def load_config_prefix(config):

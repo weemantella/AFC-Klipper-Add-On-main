@@ -82,11 +82,11 @@ class afcPrep:
                 self.AFC.gcode.respond_info("Filament loaded in bypass, not doing toolchange")
         except: bypass = None
 
-        for CUR_EXTRUDER in self.AFC.extruders.values():
-            # CUR_EXTRUDER = self.printer.lookup_object('AFC_extruder ' + EXTRUDE)
-            if CUR_EXTRUDER.tool_start != "buffer" and CUR_EXTRUDER.get_toolhead_sensor_state() == True and bypass != True:
-                if not CUR_EXTRUDER.lane_loaded:
-                    self.AFC.gcode.respond_info("<span class=error--text>{} loaded with out identifying lane in AFC.vars.tool file<span>".format(EXTRUDE))
+        # for CUR_EXTRUDER in self.AFC.extruders.values():
+        #     CUR_EXTRUDER = self.printer.lookup_object('AFC_extruder ' + extruder)
+        #     if CUR_EXTRUDER.tool_start != "buffer" and CUR_EXTRUDER.tool_start_state() == True and bypass != True:
+        #         if not CUR_EXTRUDER.lane_loaded:
+        #             self.AFC.gcode.respond_info("<span class=error--text>{} loaded with out identifying lane in AFC.vars.tool file<span>".format(EXTRUDE))
 
         # Defaulting to no active spool, putting at end so endpoint has time to register
         if self.AFC.current is None:
