@@ -13,6 +13,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixes
 - Fixes an issue where spoolman was not updating a loaded spool in toolhead
 
+## [2025-11-04]
+### Changed
+- Updated error message when using the SET_LANE_LOADED command to be more descriptive.
+
+## [2025-11-03]
+### Fixes
+- Clarified fix message if during AFC calibration, the filament fails to reach to hub sensor.
+
 ## [2025-11-02]
 ### Changed
 - Consolidated all variables for the `POOP` macro to be in the `AFC_Macro_Vars.cfg` file instead of being split in two places.
