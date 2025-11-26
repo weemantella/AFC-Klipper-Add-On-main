@@ -206,14 +206,13 @@ class AFCTrigger:
         :param pause: Boolean, if True triggers pause with error message
         """
         eventtime = self.reactor.monotonic()
-        if eventtime < self.min_event_systime or not self.enable:
+        if eventtime < self.min_event_systime or not self.enable or self.afc.function.is_paused():
             return
         if pause:
             if self.last_state == ADVANCING_STATE_NAME:
                 msg += '\nCLOG DETECTED'
             if self.last_state == TRAILING_STATE_NAME:
                 msg += '\nAFC NOT FEEDING'
-            self.min_event_systime = self.reactor.NEVER
             self.afc.error.AFC_error( msg, True )
 
     def enable_buffer(self):
