@@ -292,7 +292,7 @@ class AFCTrigger:
             else:
                 if self.fault_detection_enabled():
                     self.stop_fault_timer(eventtime)
-                    self.set_multiplier( self. multiplier_low )
+                    self.set_multiplier( self.multiplier_low )
                     self.logger.debug("Buffer Triggered State: Advanced")
 
         self.last_state = TRAILING_STATE_NAME
@@ -318,7 +318,7 @@ class AFCTrigger:
             else:
                 if self.fault_detection_enabled():
                     self.stop_fault_timer(eventtime)
-                    self.set_multiplier( self. multiplier_high )
+                    self.set_multiplier( self.multiplier_high )
                     self.logger.debug("Buffer Triggered State: Trailing")
         self.last_state = ADVANCING_STATE_NAME
 
