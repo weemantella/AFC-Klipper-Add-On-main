@@ -36,15 +36,11 @@ class AFCTrigger:
         self.buttons                = self.printer.load_object(config, "buttons")
 
         # Fault detection settings
-        self.min_event_systime    = self.reactor.NEVER
+        self.min_event_systime      = self.reactor.NEVER
         # error sensitivity, 0 disables, 1 is the least, 10 is the most
-        self.error_sensitivity    = config.getfloat("filament_error_sensitivity", default=0, minval=0, maxval=10)
-        # Invert the sensitivity scale: 1 becomes 10, 10 becomes 1
-        if self.error_sensitivity > 0:
-            self.fault_sensitivity = (11 - self.error_sensitivity) * 10
-        else:
-            self.fault_sensitivity = 0
-        self.filament_error_pos   = None
+        self.error_sensitivity      = config.getfloat("filament_error_sensitivity", default=0, minval=0, maxval=10)
+        self.fault_sensitivity      = self.get_fault_sensitivity(self.error_sensitivity)
+        self.filament_error_pos     = None
         self.past_extruder_position = None
 
         # LED SETTINGS
@@ -121,6 +117,17 @@ class AFCTrigger:
 
     # Fault detection
     # Sets up timers to check if the buffer has moved based on the distance the primary extruder has traveled
+
+    def get_fault_sensitivity(self, sensitivity):
+        """
+        Get the fault sensitivity level for filament error detection.
+
+        :param sensitivity: Float value between 0 and 10 (0 disables fault detection)
+        """
+        if sensitivity > 0:
+            return (11 - sensitivity) * 10
+        else:
+            return 0
 
     def setup_fault_timer(self):
         """
@@ -351,11 +358,7 @@ class AFCTrigger:
 
         old_sensitivity = self.error_sensitivity
         self.error_sensitivity = sensitivity
-        # Invert the sensitivity scale: 1 becomes 10, 10 becomes 1
-        if self.error_sensitivity > 0:
-            self.fault_sensitivity = (11 - self.error_sensitivity) * 10
-        else:
-            self.fault_sensitivity = 0
+        self.fault_sensitivity = self.get_fault_sensitivity(self.error_sensitivity)
 
         # Update fault detection state based on new sensitivity
         if old_sensitivity == 0 and sensitivity > 0:
