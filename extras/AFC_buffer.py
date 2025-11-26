@@ -42,6 +42,7 @@ class AFCTrigger:
         self.fault_sensitivity      = self.get_fault_sensitivity(self.error_sensitivity)
         self.filament_error_pos     = None
         self.past_extruder_position = None
+        self.extruder_pos_timer     = None
 
         # LED SETTINGS
         self.led                    = False
@@ -80,7 +81,7 @@ class AFCTrigger:
                                         self.cmd_QUERY_BUFFER_help, self.cmd_QUERY_BUFFER_options)
         self.gcode.register_mux_command("ENABLE_BUFFER",         "BUFFER", self.name, self.cmd_ENABLE_BUFFER)
         self.gcode.register_mux_command("DISABLE_BUFFER",        "BUFFER", self.name, self.cmd_DISABLE_BUFFER)
-        self.gcode.register_mux_command("SET_ERROR_SENSITIVITY", "BUFFER", self.name, self.cmd_SET_ERROR_SENSITIVITY, desc=self.cmd_SET_ERROR_SENSITIVITY_help)
+        self.gcode.register_mux_command("AFC_SET_ERROR_SENSITIVITY", "BUFFER", self.name, self.cmd_AFC_SET_ERROR_SENSITIVITY, desc=self.cmd_AFC_SET_ERROR_SENSITIVITY_help)
 
         # Turtleneck Buffer
         self.buttons.register_buttons([self.advance_pin], self.advance_callback)
@@ -123,6 +124,7 @@ class AFCTrigger:
         Get the fault sensitivity level for filament error detection.
 
         :param sensitivity: Float value between 0 and 10 (0 disables fault detection)
+        :return float: Calculated fault sensitivity distance in mm
         """
         if sensitivity > 0:
             return (11 - sensitivity) * 10
@@ -173,14 +175,27 @@ class AFCTrigger:
         :param multiplier: Rotation distance multiplier to apply
         """
         self.set_multiplier( multiplier )
-        self.update_filament_error_pos(eventtime)
+        self.update_filament_error_pos()
         self.start_fault_timer(eventtime)
+
+    def get_extruder_pos(self):
+        """
+        Get the current extruder position, tracking only forward movement.
+
+        :return float: Current extruder position or past position if current is less
+        """
+        current_pos = self.afc.function.get_extruder_pos(past_extruder_position=self.past_extruder_position)
+        if current_pos is not None:
+            self.past_extruder_position = current_pos
+        return current_pos
 
     def update_filament_error_pos(self):
         """
         Update the filament error position threshold based on current extruder position and sensitivity.
         """
-        self.filament_error_pos = (self.afc.function.get_extruder_pos() + self.fault_sensitivity)
+        current_pos = self.get_extruder_pos()
+        if current_pos is not None:
+            self.filament_error_pos = current_pos + self.fault_sensitivity
 
     def extruder_pos_update_event(self, eventtime):
         """
@@ -190,11 +205,14 @@ class AFCTrigger:
         :return float: Next scheduled event time (eventtime + CHECK_RUNOUT_TIMEOUT)
         """
         extruder_pos = self.get_extruder_pos()
+        
         # Check for filament problems
-
-        if extruder_pos != None:
-            msg = "AFC filament fault detected! Take necessary action."
-            self.pause_on_error(msg, extruder_pos > self.filament_error_pos)
+        if extruder_pos is not None and self.filament_error_pos is not None:
+            if extruder_pos > self.filament_error_pos:
+                msg = "AFC filament fault detected! Take necessary action."
+                self.pause_on_error(msg, True)
+                # Update error position after triggering to prevent repeated triggers
+                self.update_filament_error_pos()
 
         return eventtime + CHECK_RUNOUT_TIMEOUT
 
@@ -239,7 +257,7 @@ class AFCTrigger:
         if self.led:
             self.afc.function.afc_led(self.led_buffer_disabled, self.led_index)
         self.reset_multiplier()
-        if self.fault_detection_enabled():
+        if self.error_sensitivity > 0 and self.extruder_pos_timer is not None:
             eventtime = self.reactor.monotonic()
             self.stop_fault_timer(eventtime)
 
@@ -335,8 +353,8 @@ class AFCTrigger:
         """
         return self.last_state
 
-    cmd_SET_ERROR_SENSITIVITY_help = "Set filament error sensitivity (0-10, 0=disabled)"
-    def cmd_SET_ERROR_SENSITIVITY(self, gcmd):
+    cmd_AFC_SET_ERROR_SENSITIVITY_help = "Set filament error sensitivity (0-10, 0=disabled)"
+    def cmd_AFC_SET_ERROR_SENSITIVITY(self, gcmd):
         """
         Sets the filament error sensitivity for fault detection during printing.
 
@@ -376,8 +394,7 @@ class AFCTrigger:
             self.stop_fault_timer(eventtime)
         elif sensitivity > 0:
             # Update the error position with new sensitivity
-            eventtime = self.reactor.monotonic()
-            self.update_filament_error_pos(eventtime)
+            self.update_filament_error_pos()
 
         self.logger.info("Error sensitivity set to {} (fault sensitivity: {})".format(
             self.error_sensitivity, self.fault_sensitivity))
@@ -498,9 +515,10 @@ class AFCTrigger:
 
         if self.enable:
             lane = self.afc.function.get_current_lane_obj()
-            stepper = lane.extruder_stepper.stepper
-            rotation_dist = stepper.get_rotation_distance()[0]
-            state_info += ("\n{} Rotation distance: {:.4f}".format(lane.name, rotation_dist))
+            if lane is not None:
+                stepper = lane.extruder_stepper.stepper
+                rotation_dist = stepper.get_rotation_distance()[0]
+                state_info += ("\n{} Rotation distance: {:.4f}".format(lane.name, rotation_dist))
             if self.error_sensitivity > 0:
                 state_info += "\nFault detection enabled, sensitivity {}".format(self.error_sensitivity)
 
