@@ -205,7 +205,6 @@ class AFCTrigger:
         :return float: Next scheduled event time (eventtime + CHECK_RUNOUT_TIMEOUT)
         """
         extruder_pos = self.get_extruder_pos()
-        
         # Check for filament problems
         if extruder_pos is not None and self.filament_error_pos is not None:
             if extruder_pos > self.filament_error_pos:
@@ -549,6 +548,30 @@ class AFCTrigger:
         self.response['state'] = self.last_state
         self.response['lanes'] = [lane.name for lane in self.lanes.values()]
         self.response['enabled'] = self.enable
+
+        # Add current rotation distance if buffer is enabled and lane is loaded
+        if self.enable:
+            lane = self.afc.function.get_current_lane_obj()
+            if lane is not None:
+                stepper = lane.extruder_stepper.stepper
+                self.response['rotation_distance'] = stepper.get_rotation_distance()[0]
+        else:
+            self.response['rotation_distance'] = None
+
+        # Add fault detection information
+        self.response['fault_detection_enabled'] = self.error_sensitivity > 0
+        self.response['error_sensitivity'] = self.error_sensitivity
+        # Add current extruder position and error threshold only when actively tracking
+        # (tracking starts when a buffer switch is triggered during printing)
+        if self.error_sensitivity > 0 and self.filament_error_pos is not None:
+            current_pos = self.get_extruder_pos()
+            if current_pos is not None:
+                self.response['distance_to_fault'] = self.filament_error_pos - current_pos
+            else:
+                self.response['distance_to_fault'] = None
+        else:
+            self.response['distance_to_fault'] = None
+
         return self.response
 
 def load_config_prefix(config):
