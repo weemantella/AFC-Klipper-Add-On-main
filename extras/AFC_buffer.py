@@ -175,7 +175,6 @@ class AFCTrigger:
     # pause print through AFC_error, check before stops repeat events
     def pause_on_error(self, msg, pause=False):
         eventtime = self.reactor.monotonic()
-        CUR_LANE = self.afc.function.get_current_lane_obj()
         if eventtime < self.min_event_systime or not self.enable:
             return
         if pause:
@@ -281,14 +280,14 @@ class AFCTrigger:
     def cmd_SET_ERROR_SENSITIVITY(self, gcmd):
         """
         Sets the filament error sensitivity for fault detection during printing.
-        
+
         Parameters:
         - SENSITIVITY: Float value between 0 and 10 (0 disables fault detection)
-        
+
         Usage
         -----
         `SET_ERROR_SENSITIVITY BUFFER=<buffer_name> SENSITIVITY=<0-10>`
-        
+
         Example
         -----
         ```
@@ -296,7 +295,7 @@ class AFCTrigger:
         ```
         """
         sensitivity = gcmd.get_float('SENSITIVITY', minval=0, maxval=10)
-        
+
         old_sensitivity = self.error_sensitivity
         self.error_sensitivity = sensitivity
         # Invert the sensitivity scale: 1 becomes 10, 10 becomes 1
@@ -304,7 +303,7 @@ class AFCTrigger:
             self.fault_sensitivity = (11 - self.error_sensitivity) * 10
         else:
             self.fault_sensitivity = 0
-        
+
         # Update fault detection state based on new sensitivity
         if old_sensitivity == 0 and sensitivity > 0:
             # Fault detection was disabled, now enabling
@@ -325,7 +324,7 @@ class AFCTrigger:
             # Update the error position with new sensitivity
             eventime = self.reactor.monotonic()
             self.update_filament_error_pos(eventime)
-        
+
         self.logger.info("Error sensitivity set to {} (fault sensitivity: {})".format(
             self.error_sensitivity, self.fault_sensitivity))
 
