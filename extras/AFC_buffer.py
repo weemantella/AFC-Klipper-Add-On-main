@@ -98,7 +98,7 @@ class AFCTrigger:
     def __str__(self):
         """
         Return the buffer name as a string.
-        
+
         :return string: Buffer name
         """
         return self.name
@@ -134,7 +134,7 @@ class AFCTrigger:
     def start_fault_timer(self, print_time):
         """
         Start the fault detection timer to begin monitoring for errors.
-        
+
         :param print_time: Current print time for timer scheduling
         """
         self.reactor.update_timer(self.extruder_pos_timer, self.reactor.NOW)
@@ -142,7 +142,7 @@ class AFCTrigger:
     def stop_fault_timer(self, print_time):
         """
         Stop the fault detection timer.
-        
+
         :param print_time: Current print time for timer scheduling
         """
         self.reactor.update_timer(self.extruder_pos_timer, self.reactor.NEVER)
@@ -150,7 +150,7 @@ class AFCTrigger:
     def fault_detection_enabled(self):
         """
         Check if fault detection should be active (printing with movement and sensitivity > 0).
-        
+
         :return boolean: True if printer is printing with movement and sensitivity > 0
         """
         if self.afc.function.is_printing(check_movement=True) and self.error_sensitivity > 0:
@@ -161,7 +161,7 @@ class AFCTrigger:
     def start_fault_detection(self, eventtime, multiplier):
         """
         Start fault detection with the specified multiplier and reset error tracking position.
-        
+
         :param eventtime: Current event time from reactor
         :param multiplier: Rotation distance multiplier to apply
         """
@@ -178,7 +178,7 @@ class AFCTrigger:
     def extruder_pos_update_event(self, eventtime):
         """
         Timer callback to check extruder position and trigger fault detection if threshold exceeded.
-        
+
         :param eventtime: Current event time from reactor
         :return float: Next scheduled event time (eventtime + CHECK_RUNOUT_TIMEOUT)
         """
@@ -194,7 +194,7 @@ class AFCTrigger:
     def pause_on_error(self, msg, pause=False):
         """
         Pause the print with an error message if fault is detected, prevents duplicate triggers.
-        
+
         :param msg: Error message to display
         :param pause: Boolean, if True triggers pause with error message
         """
@@ -208,7 +208,6 @@ class AFCTrigger:
                 msg += '\nAFC NOT FEEDING'
             self.min_event_systime = self.reactor.NEVER
             self.afc.error.AFC_error( msg, True )
-
 
     def enable_buffer(self):
         """
@@ -241,7 +240,7 @@ class AFCTrigger:
     def set_multiplier(self, multiplier):
         """
         Set the rotation distance multiplier for the current lane and update LED state.
-        
+
         :param multiplier: Float value to multiply rotation distance (>1 advances, <1 trails)
         """
         if not self.enable: return
@@ -274,7 +273,7 @@ class AFCTrigger:
     def advance_callback(self, eventtime, state):
         """
         Handle advance buffer switch trigger, adjust multiplier and start/stop fault detection.
-        
+
         :param eventtime: Current event time from reactor
         :param state: Boolean, True when switch is triggered (buffer expanded)
         """
@@ -300,7 +299,7 @@ class AFCTrigger:
     def trailing_callback(self, eventtime, state):
         """
         Handle trailing buffer switch trigger, adjust multiplier and start/stop fault detection.
-        
+
         :param eventtime: Current event time from reactor
         :param state: Boolean, True when switch is triggered (buffer compressed)
         """
@@ -325,7 +324,7 @@ class AFCTrigger:
     def buffer_status(self):
         """
         Return the current buffer state (Trailing or Advancing).
-        
+
         :return string: Current buffer state
         """
         return self.last_state
