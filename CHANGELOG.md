@@ -4,6 +4,29 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [2025-11-25]
+### Added
+- **Buffer Fault Detection System**: New filament fault detection feature for AFC buffers to detect clogs, and feeding issues.
+  - Monitors extruder position and buffer state changes to detect abnormal conditions
+  - Configurable sensitivity (0-10 scale, where 0 disables, 1 is least sensitive, 10 is most sensitive)
+  - Automatically pauses print and provides diagnostic messages when faults are detected
+  - Distinguishes between clog detection (buffer advancing/expanding state) and AFC feeding issues (buffer trailing/compressing state)
+  - Timer-based monitoring with configurable CHECK_RUNOUT_TIMEOUT (0.5s default)
+- **New Command: `SET_ERROR_SENSITIVITY`**: Allows dynamic adjustment of fault detection sensitivity during runtime without restarting Klipper
+  - Supports values 0-10 (0 disables fault detection, 1 least sensitive/100mm, 10 most sensitive/10mm)
+  - Automatically enables/disables fault detection timers based on sensitivity changes
+  - Usage: `SET_ERROR_SENSITIVITY BUFFER=<buffer_name> SENSITIVITY=<0-10>`
+- Enhanced `QUERY_BUFFER` command to report fault detection status and current sensitivity level
+
+### Changed
+- Reversed buffer fault detection sensitivity scale: sensitivity value of 1 is now the least sensitive (100mm fault distance) and 10 is now the most sensitive (10mm fault distance). This makes the scale more intuitive where higher numbers mean more sensitive detection
+- Buffer callbacks (`advance_callback` and `trailing_callback`) now integrate with fault detection system
+  - When fault detection is enabled during printing, buffer automatically adjusts monitoring with extra-low/extra-high multipliers
+  - Stops fault timer when buffer is not actively engaged
+- Buffer enable/disable now properly manages fault detection timers to prevent false positives
+
+### Fixed
+- Buffer fault detection now respects the `enable` state and only triggers during active printing with movement
 
 ## [2025-11-14]
 ### Update

@@ -12,6 +12,7 @@ except: raise error("Error when trying to import AFC_utils.add_filament_switch\n
 
 TRAILING_STATE_NAME = "Trailing"
 ADVANCING_STATE_NAME = "Advancing"
+CHECK_RUNOUT_TIMEOUT = .5
 
 class AFCTrigger:
 
@@ -33,6 +34,19 @@ class AFCTrigger:
         self.debug                  = config.getboolean("debug", False)
         self.enable_sensors_in_gui  = config.getboolean("enable_sensors_in_gui", self.afc.enable_sensors_in_gui)  # Set to True toolhead sensors switches as filament sensors in mainsail/fluidd gui, overrides value set in AFC.cfg
         self.buttons                = self.printer.load_object(config, "buttons")
+
+        # Fault detection settings
+        self.estimated_print_time = None
+        self.min_event_systime    = self.reactor.NEVER
+        # error sensitivity, 0 disables, 1 is the least, 10 is the most
+        self.error_sensitivity    = config.getfloat("filament_error_sensitivity", default=0, minval=0, maxval=10)
+        # Invert the sensitivity scale: 1 becomes 10, 10 becomes 1
+        if self.error_sensitivity > 0:
+            self.fault_sensitivity = (11 - self.error_sensitivity) * 10
+        else:
+            self.fault_sensitivity = 0
+        self.filament_error_pos   = None
+        self.past_extruder_position = None
 
         # LED SETTINGS
         self.led                    = False
@@ -69,8 +83,9 @@ class AFCTrigger:
         self.function.register_mux_command(self.show_macros, "QUERY_BUFFER", "BUFFER", self.name,
                                             self.cmd_QUERY_BUFFER,
                                         self.cmd_QUERY_BUFFER_help, self.cmd_QUERY_BUFFER_options)
-        self.gcode.register_mux_command("ENABLE_BUFFER",        "BUFFER", self.name, self.cmd_ENABLE_BUFFER)
-        self.gcode.register_mux_command("DISABLE_BUFFER",       "BUFFER", self.name, self.cmd_DISABLE_BUFFER)
+        self.gcode.register_mux_command("ENABLE_BUFFER",         "BUFFER", self.name, self.cmd_ENABLE_BUFFER)
+        self.gcode.register_mux_command("DISABLE_BUFFER",        "BUFFER", self.name, self.cmd_DISABLE_BUFFER)
+        self.gcode.register_mux_command("SET_ERROR_SENSITIVITY", "BUFFER", self.name, self.cmd_SET_ERROR_SENSITIVITY, desc=self.cmd_SET_ERROR_SENSITIVITY_help)
 
         # Turtleneck Buffer
         self.buttons.register_buttons([self.advance_pin], self.advance_callback)
@@ -86,12 +101,91 @@ class AFCTrigger:
 
     def _handle_ready(self):
         self.min_event_systime = self.reactor.monotonic() + 2.
+        self.toolhead   = self.printer.lookup_object('toolhead')
+
+        if self.error_sensitivity > 0:
+            self.setup_fault_timer()
 
         if self.led_index is not None:
             # Verify that LED config is found
             error_string, led = self.afc.function.verify_led_object(self.led_index)
             if led is None:
                 raise error(error_string)
+
+    # Fault detection
+        # Sets up timers to check if the buffer has moved based on the distance the primary extruder has traveled
+
+    def setup_fault_timer(self):
+        self.extruder = self.toolhead.get_extruder()
+        self.estimated_print_time = (self.printer.lookup_object('mcu').estimated_print_time)
+        self.update_filament_error_pos()
+        # register timer that will run to check buffer state changes
+        self.extruder_pos_timer = self.reactor.register_timer(self.extruder_pos_update_event)
+
+    def start_fault_timer(self, print_time):
+        self.reactor.update_timer(self.extruder_pos_timer, self.reactor.NOW)
+
+    def stop_fault_timer(self, print_time):
+        self.reactor.update_timer(self.extruder_pos_timer, self.reactor.NEVER)
+
+    def fault_detection_enabled(self):
+        if self.afc.function.is_printing(check_movement=True) and self.error_sensitivity > 0:
+            return True
+        else:
+            return False
+
+    def start_fault_detection(self, eventime, multiplier):
+        self.set_multiplier( multiplier )
+        self.update_filament_error_pos(eventime)
+        self.start_fault_timer(eventime)
+
+    # get the position of the extruder for error reference
+    def get_extruder_pos(self, eventtime=None):
+        if eventtime is None:
+            eventtime = self.reactor.monotonic()
+        print_time = self.estimated_print_time(eventtime)
+        last_extruder_position = self.extruder.find_past_position(print_time)
+
+        if self.past_extruder_position is None or last_extruder_position > self.past_extruder_position:
+            self.past_extruder_position = last_extruder_position
+            if last_extruder_position > 0: self.logger.debug("Extruder last position: {}".format(last_extruder_position))
+            return last_extruder_position
+
+        else:
+            return self.past_extruder_position
+
+    # store error length
+    def update_filament_error_pos(self, eventtime=None):
+        if eventtime is None:
+            eventtime = self.reactor.monotonic()
+        self.filament_error_pos = (self.get_extruder_pos(eventtime) + self.fault_sensitivity)
+
+    # watch for filament errors
+    # if the extruder position is greater then the set error out length pause print
+    def extruder_pos_update_event(self, eventtime):
+        extruder_pos = self.get_extruder_pos(eventtime)
+        # Check for filament problems
+
+        if extruder_pos != None:
+            msg = "AFC filament fault detected! Take necessary action."
+            self.pause_on_error(msg, extruder_pos > self.filament_error_pos)
+
+        return eventtime + CHECK_RUNOUT_TIMEOUT
+
+    # pause print through AFC_error, check before stops repeat events
+    def pause_on_error(self, msg, pause=False):
+        eventtime = self.reactor.monotonic()
+        CUR_LANE = self.afc.function.get_current_lane_obj()
+        if eventtime < self.min_event_systime or not self.enable:
+            return
+        if pause:
+            if self.last_state == ADVANCING_STATE_NAME:
+                msg += '\n CLOG DETECTED'
+            if self.last_state == TRAILING_STATE_NAME:
+                msg += '\n AFC NOT FEEDING'
+            self.min_event_systime = self.reactor.NEVER
+            self.afc.error.AFC_error( msg, True )
+
 
     def enable_buffer(self):
         if self.led:
@@ -111,6 +205,9 @@ class AFCTrigger:
         if self.led:
             self.afc.function.afc_led(self.led_buffer_disabled, self.led_index)
         self.reset_multiplier()
+        if self.fault_detection_enabled():
+            eventime = self.reactor.monotonic()
+            self.stop_fault_timer(eventime)
 
     # Turtleneck commands
     def set_multiplier(self, multiplier):
@@ -144,8 +241,18 @@ class AFCTrigger:
             cur_lane = self.afc.function.get_current_lane_obj()
 
             if cur_lane is not None and state:
-                self.set_multiplier( self.multiplier_low )
-                self.logger.debug("Buffer Triggered State: Advanced")
+                if self.fault_detection_enabled():
+                    multiplier_extra_low = (self.multiplier_low * 2) / 5
+                    self.start_fault_detection(eventime, multiplier_extra_low)
+                else:
+                    self.set_multiplier( self.multiplier_low )
+                    self.logger.debug("Buffer Triggered State: Advanced")
+            else:
+                if self.fault_detection_enabled():
+                    self.stop_fault_timer(eventime)
+                    self.set_multiplier( self. multiplier_low )
+                    self.logger.debug("Buffer Triggered State: Advanced")
+
         self.last_state = TRAILING_STATE_NAME
 
     def trailing_callback(self, eventime, state):
@@ -154,12 +261,73 @@ class AFCTrigger:
             cur_lane = self.afc.function.get_current_lane_obj()
 
             if cur_lane is not None and state:
-                self.set_multiplier( self.multiplier_high )
-                self.logger.debug("Buffer Triggered State: Trailing")
+                if self.fault_detection_enabled():
+                    multiplier_extra_high = (self.multiplier_high * 1.5)
+                    self.start_fault_detection(eventime, multiplier_extra_high)
+                else:
+                    self.set_multiplier( self.multiplier_high )
+                    self.logger.debug("Buffer Triggered State: Trailing")
+            else:
+                if self.fault_detection_enabled():
+                    self.stop_fault_timer(eventime)
+                    self.set_multiplier( self. multiplier_high )
+                    self.logger.debug("Buffer Triggered State: Trailing")
         self.last_state = ADVANCING_STATE_NAME
 
     def buffer_status(self):
         return self.last_state
+
+    cmd_SET_ERROR_SENSITIVITY_help = "Set filament error sensitivity (0-10, 0=disabled)"
+    def cmd_SET_ERROR_SENSITIVITY(self, gcmd):
+        """
+        Sets the filament error sensitivity for fault detection during printing.
+        
+        Parameters:
+        - SENSITIVITY: Float value between 0 and 10 (0 disables fault detection)
+        
+        Usage
+        -----
+        `SET_ERROR_SENSITIVITY BUFFER=<buffer_name> SENSITIVITY=<0-10>`
+        
+        Example
+        -----
+        ```
+        SET_ERROR_SENSITIVITY BUFFER=TN SENSITIVITY=5.0
+        ```
+        """
+        sensitivity = gcmd.get_float('SENSITIVITY', minval=0, maxval=10)
+        
+        old_sensitivity = self.error_sensitivity
+        self.error_sensitivity = sensitivity
+        # Invert the sensitivity scale: 1 becomes 10, 10 becomes 1
+        if self.error_sensitivity > 0:
+            self.fault_sensitivity = (11 - self.error_sensitivity) * 10
+        else:
+            self.fault_sensitivity = 0
+        
+        # Update fault detection state based on new sensitivity
+        if old_sensitivity == 0 and sensitivity > 0:
+            # Fault detection was disabled, now enabling
+            if self.fault_detection_enabled():
+                self.setup_fault_timer()
+                eventime = self.reactor.monotonic()
+                multiplier = 1.0
+                if self.last_state == TRAILING_STATE_NAME:
+                    multiplier = self.multiplier_low
+                else:
+                    multiplier = self.multiplier_high
+                self.start_fault_detection(eventime, multiplier)
+        elif old_sensitivity > 0 and sensitivity == 0:
+            # Fault detection was enabled, now disabling
+            eventime = self.reactor.monotonic()
+            self.stop_fault_timer(eventime)
+        elif sensitivity > 0:
+            # Update the error position with new sensitivity
+            eventime = self.reactor.monotonic()
+            self.update_filament_error_pos(eventime)
+        
+        self.logger.info("Error sensitivity set to {} (fault sensitivity: {})".format(
+            self.error_sensitivity, self.fault_sensitivity))
 
     cmd_SET_BUFFER_MULTIPLIER_help = "live adjust buffer high and low multiplier"
     def cmd_SET_BUFFER_MULTIPLIER(self, gcmd):
@@ -280,6 +448,8 @@ class AFCTrigger:
             stepper = lane.extruder_stepper.stepper
             rotation_dist = stepper.get_rotation_distance()[0]
             state_info += ("\n{} Rotation distance: {:.4f}".format(lane.name, rotation_dist))
+            if self.error_sensitivity > 0:
+                state_info += "\nFault detection enabled, sensitivity {}".format(self.error_sensitivity)
 
         self.logger.info("{} : {}".format(self.name, state_info))
 
