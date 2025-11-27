@@ -43,6 +43,7 @@ class AFCTrigger:
         self.filament_error_pos     = None
         self.past_extruder_position = None
         self.extruder_pos_timer     = None
+        self.fault_timer            = None
 
         # LED SETTINGS
         self.led                    = False
@@ -146,6 +147,7 @@ class AFCTrigger:
 
         :param print_time: Current print time for timer scheduling
         """
+        self.fault_timer = "Running"
         self.reactor.update_timer(self.extruder_pos_timer, self.reactor.NOW)
 
     def stop_fault_timer(self, print_time):
@@ -154,6 +156,7 @@ class AFCTrigger:
 
         :param print_time: Current print time for timer scheduling
         """
+        self.fault_timer = "Stopped"
         self.reactor.update_timer(self.extruder_pos_timer, self.reactor.NEVER)
 
     def fault_detection_enabled(self):
@@ -162,7 +165,7 @@ class AFCTrigger:
 
         :return boolean: True if printer is printing with movement and sensitivity > 0
         """
-        if self.afc.function.is_printing(check_movement=True) and self.error_sensitivity > 0:
+        if self.error_sensitivity > 0:
             return True
         else:
             return False
@@ -206,7 +209,9 @@ class AFCTrigger:
         """
         extruder_pos = self.get_extruder_pos()
         # Check for filament problems
-        if extruder_pos is not None and self.filament_error_pos is not None:
+        if (self.afc.function.is_printing(check_movement=True)
+            and extruder_pos is not None
+            and self.filament_error_pos is not None):
             if extruder_pos > self.filament_error_pos:
                 msg = "AFC filament fault detected! Take necessary action."
                 self.pause_on_error(msg, True)
@@ -226,9 +231,9 @@ class AFCTrigger:
         if eventtime < self.min_event_systime or not self.enable or self.afc.function.is_paused():
             return
         if pause:
-            if self.last_state == ADVANCING_STATE_NAME:
-                msg += '\nCLOG DETECTED'
             if self.last_state == TRAILING_STATE_NAME:
+                msg += '\nCLOG DETECTED'
+            if self.last_state == ADVANCING_STATE_NAME:
                 msg += '\nAFC NOT FEEDING'
             self.afc.error.AFC_error( msg, True )
 
@@ -242,9 +247,17 @@ class AFCTrigger:
         multiplier = 1.0
         if self.last_state == TRAILING_STATE_NAME:
             multiplier = self.multiplier_low
+            if self.fault_detection_enabled():
+                multiplier = (multiplier * 2) / 5
         else:
             multiplier = self.multiplier_high
-        self.set_multiplier( multiplier )
+            if self.fault_detection_enabled():
+                multiplier = multiplier * 1.5
+
+        if self.fault_detection_enabled():
+            self.start_fault_detection(0, multiplier)
+        else:
+            self.set_multiplier( multiplier )
         self.logger.debug("{} buffer enabled".format(self.name))
 
     def disable_buffer(self):
@@ -561,12 +574,15 @@ class AFCTrigger:
         # Add fault detection information
         self.response['fault_detection_enabled'] = self.error_sensitivity > 0
         self.response['error_sensitivity'] = self.error_sensitivity
+        self.response['fault_timer'] = self.fault_timer
         # Add current extruder position and error threshold only when actively tracking
         # (tracking starts when a buffer switch is triggered during printing)
         if self.error_sensitivity > 0 and self.filament_error_pos is not None:
             current_pos = self.get_extruder_pos()
             if current_pos is not None:
                 self.response['distance_to_fault'] = self.filament_error_pos - current_pos
+                self.response['filament_error_pos'] = self.filament_error_pos
+                self.response['current_pos'] = current_pos
             else:
                 self.response['distance_to_fault'] = None
         else:
