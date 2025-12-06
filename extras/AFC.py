@@ -702,7 +702,7 @@ class afc:
         cur_lane.do_enable(False)
         self.current_state = State.IDLE
         cur_lane.unit_obj.return_to_home()
-        # Put CAM back to lane if its loaded to toolhead
+        # Put CAM back to lane if it is loaded to the toolhead
         self.function.select_loaded_lane()
 
     def _get_resume_speed(self):
