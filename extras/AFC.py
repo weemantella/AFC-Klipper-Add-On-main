@@ -192,7 +192,8 @@ class afc:
         self.resume_z_speed         = config.getfloat("resume_z_speed", self.speed) # Speed mm/s of resume move in Z. Set to 0 to use gcode speed
 
         self.global_print_current   = config.getfloat("global_print_current", None) # Global variable to set steppers current to a specified current when printing. Going lower than 0.6 may result in TurtleNeck buffer's not working correctly
-
+        self.spool_ratio            = config.getfloat("spool_ratio",2)              # gear ratio for printed gearbox between N20 and spooler wheels
+        self.full_weight            = config.getfloat("full_weight",1000, minval=1)           # full weight of filament spool (not counting spool itself)
         self.enable_sensors_in_gui  = config.getboolean("enable_sensors_in_gui", False) # Set to True to show all sensor switches as filament sensors in mainsail/fluidd gui
         self.load_to_hub            = config.getboolean("load_to_hub", True)        # Fast loads filament to hub when inserted, set to False to disable. This is a global setting and can be overridden at AFC_stepper
         self.assisted_unload        = config.getboolean("assisted_unload", True)    # If True, the unload retract is assisted to prevent loose windings, especially on full spools. This can prevent loops from slipping off the spool
@@ -1159,7 +1160,7 @@ class afc:
                         msg += "Buffer did not become compressed after {} short moves.\n".format(self.tool_max_load_checks)
                         msg += "Setting and increasing 'tool_max_load_checks' in AFC.cfg may improve loading reliability.\n\n"
                         msg += "Check that the filament is properly loaded into the toolhead extruder. If filament is loaded\n"
-                        msg += "into toolhead extruders gears, then manually run SET_LANE_LOADED LANE={cur_lane.name} then\n"
+                        msg += f"into toolhead extruders gears, then manually run SET_LANE_LOADED LANE={cur_lane.name} then\n"
                         msg += "manually extrude filament and clean nozzle."
                         if self.function.in_print():
                             msg += '\nOnce issue is resolved click resume to continue printing'
