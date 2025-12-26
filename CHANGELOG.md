@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2025-12-26]
+### Changed:
+- Updated AFC_CUT macro to move to pin first before doing filament retraction.
+- Updated AFC_CUT macro so that is more safe for toolheads with cutters that move in the forwards/backwards movement. 
+- Updated AFC_CUT macro to clear pin once cutting is done so that is safer for toolheads with forward/backward cutters.
+
 ## [2025-12-18]
 ### Fixed
 - Fixing issue where order mattered when creating flat config files, replaced lookup_object with load_object so klipper would not error out and instead load object if it was not already loaded.
