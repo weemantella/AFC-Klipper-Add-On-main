@@ -54,6 +54,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2025-12-03]
 ### Fixed
 - Fixes bug where print current is not correctly set back to correct value after using LANE_MOVE macro.
+- Fixed a bug when installing a HTLF, all MCU definition files would be copied over instead of just the selected board type.
 
 ## [2025-11-26]
 ### Added
