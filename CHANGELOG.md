@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added:
 - The afc-debug.sh script will now upload the AFC statistics from moonraker for easier troubleshooting.
 
+## [2026-01-14]
+### Fix:
+- Implemented some fixes to prevent klipper crashing when calibrating HTLF units
+
 ## [2026-01-12]
 ### Added:
 - Added debugging messages when doing unloading filament from toolhead for tool_stn_unload movements
@@ -54,6 +58,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2025-12-03]
 ### Fixed
 - Fixes bug where print current is not correctly set back to correct value after using LANE_MOVE macro.
+- Fixed a bug when installing a HTLF, all MCU definition files would be copied over instead of just the selected board type.
 
 ## [2025-11-26]
 ### Added
