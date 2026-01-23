@@ -5,9 +5,104 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2026-01-22]
+### Changed:
+- The install-afc.sh script will now allow users to install as root if it detects the user is running a SAF K1 environment.
+
+## [2026-01-15]
+### Added:
+- The afc-debug.sh script will now upload the AFC statistics from moonraker for easier troubleshooting.
+
+## Fixed
+- Updates to help with false clog/feed detections
+- Resetting filament position for clog detection when starting a new print
+
+## [2026-01-14]
+### Fix:
+- Implemented some fixes to prevent klipper crashing when calibrating HTLF units
+
+## [2026-01-12]
+### Added:
+- Added debugging messages when doing unloading filament from toolhead for tool_stn_unload movements
+
+## [2026-01-10]
+### Added:
+- Check to verify user's macros positions are set correctly and not left as default values. Changed default values to -99,-99 etc, just in case someone does truly have their positions at -1,-1.
+
+## [2026-01-09]
+### Changed:
+- Restructured how extruder load/unload counts are stored in moonraker database to work better for toolchangers.
+- Added ability to track cuts per toolhead for toolchangers.
+- Changed how average times are calculated. Use `AFC_RESET_STATS EXTRUDER=all` to use new `total_time/count` calculation.
+- Merged normal and skinny AFC_STATS printout into one function and changed printout format to work better with toolchangers.
+
+## [2025-12-26]
+### Changed:
+- Updated AFC_CUT macro to move to pin first before doing filament retraction.
+- Updated AFC_CUT macro so that is more safe for toolheads with cutters that move in the forwards/backwards movement. 
+- Updated AFC_CUT macro to clear pin once cutting is done so that is safer for toolheads with forward/backward cutters.
+
+## [2025-12-18]
+### Fixed
+- Fixing issue where order mattered when creating flat config files, replaced lookup_object with load_object so klipper would not error out and instead load object if it was not already loaded.
+
+## [2025-12-17]
+### Fixed
+- Fixed issue where AFC would crash klipper when trying to find git version when git folder does not exist
+- Fixed issue where AFC would cause error if log file variable was not passed into klipper service
+
+## [2025-12-11]
+### Fixed
+- Fix output of `AFC_TOGGLE_MACRO` to correctly report state of WIPE macro
+
+## [2025-12-07]
+### Added
+- Updated spool assist cruise time calculations to be more linear with spool weight
+
+## [2025-12-06]
+### Fixed
+- Fixes issue where klipper would crash for HTLF units when homing and moving lanes during prep
+
 ## [2025-12-03]
-### Fixes
+### Fixed
+- Fixes bug where print current is not correctly set back to correct value after using LANE_MOVE macro.
 - Fixed a bug when installing a HTLF, all MCU definition files would be copied over instead of just the selected board type.
+
+## [2025-11-26]
+### Added
+- Added `spool_id` field to `lane_data` namespace for Spoolman integration (#575)
+
+## [2025-11-25]
+### Added
+- **Buffer Fault Detection System**: New filament fault detection feature for AFC buffers to detect clogs, and feeding issues.
+  - Monitors extruder position and buffer state changes to detect abnormal conditions
+  - Configurable sensitivity (0-10 scale, where 0 disables, 1 is least sensitive, 10 is most sensitive)
+  - Automatically pauses print and provides diagnostic messages when faults are detected
+  - Distinguishes between clog detection (buffer advancing/expanding state) and AFC feeding issues (buffer trailing/compressing state)
+  - Timer-based monitoring with configurable CHECK_RUNOUT_TIMEOUT (0.5s default)
+- **New Command: `SET_ERROR_SENSITIVITY`**: Allows dynamic adjustment of fault detection sensitivity during runtime without restarting Klipper
+  - Supports values 0-10 (0 disables fault detection, 1 least sensitive/100mm, 10 most sensitive/10mm)
+  - Automatically enables/disables fault detection timers based on sensitivity changes
+  - Usage: `SET_ERROR_SENSITIVITY BUFFER=<buffer_name> SENSITIVITY=<0-10>`
+- Enhanced `QUERY_BUFFER` command to report fault detection status and current sensitivity level
+
+### Changed
+- Reversed buffer fault detection sensitivity scale: sensitivity value of 1 is now the least sensitive (100mm fault distance) and 10 is now the most sensitive (10mm fault distance). This makes the scale more intuitive where higher numbers mean more sensitive detection
+- Buffer callbacks (`advance_callback` and `trailing_callback`) now integrate with fault detection system
+  - When fault detection is enabled during printing, buffer automatically adjusts monitoring with extra-low/extra-high multipliers
+  - Stops fault timer when buffer is not actively engaged
+- Buffer enable/disable now properly manages fault detection timers to prevent false positives
+
+### Fixed
+- Buffer fault detection now respects the `enable` state and only triggers during active printing with movement
+
+## [2025-11-14]
+### Update
+- Changed unload order for infinite spool to prevent excess nozzle oozing when ejecting spool. New unload order is: Unload Tool->Eject Spool->Load rollover lane
+
+## [2025-11-09]
+### Fixes
+- Fixes an issue where spoolman was not updating a loaded spool in toolhead
 
 ## [2025-11-04]
 ### Changed
@@ -16,6 +111,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2025-11-03]
 ### Fixes
 - Clarified fix message if during AFC calibration, the filament fails to reach to hub sensor.
+
+## [2025-11-02]
+### Changed
+- Consolidated all variables for the `POOP` macro to be in the `AFC_Macro_Vars.cfg` file instead of being split in two places.
 
 ## [2025-11-01]
 ### Changed

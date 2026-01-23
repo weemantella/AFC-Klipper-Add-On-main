@@ -11,7 +11,7 @@ class AFCSpool:
         self.printer.register_event_handler("klippy:connect", self.handle_connect)
 
         # Temporary status variables
-        self.next_spool_id      = ''
+        self.next_spool_id      = None
 
     def handle_connect(self):
         """
@@ -248,12 +248,21 @@ class AFCSpool:
             # Check if spool id is already assigned to a different lane, don't assign to current lane if id
             # is already assigned
             if SpoolID != '':
-                SpoolID = int(SpoolID)
+                try:
+                    SpoolID = int(SpoolID)
+                except ValueError:
+                    self.logger.error("Invalid spool ID: {}".format(SpoolID))
+                    return
+
                 if cur_lane.spool_id != SpoolID and any( SpoolID == lane.spool_id for lane in self.afc.lanes.values()):
                     self.logger.error(f"SpoolId {SpoolID} already assigned to a lane, cannot assign to {lane}.")
                     return
 
             self.set_spoolID(cur_lane, SpoolID)
+
+            # If the lane is currently loaded to the toolhead, update the active spool in Spoolman
+            if cur_lane.name == self.afc.current:
+                self.set_active_spool(cur_lane.spool_id)
 
     def _get_filament_values( self, filament, field, default=None):
         '''
@@ -277,16 +286,16 @@ class AFCSpool:
         cur_lane.material = self.afc.default_material_type
         cur_lane.weight = 1000 # Defaulting weight to 1000 upon load
 
-        if self.afc.spoolman is not None and self.next_spool_id != '':
+        if self.afc.spoolman is not None and self.next_spool_id is not None:
             spool_id = self.next_spool_id
-            self.next_spool_id = ''
+            self.next_spool_id = None
             self.set_spoolID(cur_lane, spool_id)
 
     def clear_values(self, cur_lane):
         """
         Helper function for clearing out lane spool values
         """
-        cur_lane.spool_id = ''
+        cur_lane.spool_id = None
         cur_lane.material = ''
         cur_lane.color = ''
         cur_lane.weight = 0
@@ -296,7 +305,7 @@ class AFCSpool:
 
     def set_spoolID(self, cur_lane, SpoolID, save_vars=True):
         if self.afc.spoolman is not None:
-            if SpoolID !='':
+            if SpoolID not in ('', None):
                 try:
                     result = self.afc.moonraker.get_spool(SpoolID)
                     cur_lane.spool_id = SpoolID
@@ -308,6 +317,7 @@ class AFCSpool:
                     cur_lane.filament_diameter  = self._get_filament_values(result['filament'], 'diameter')
                     cur_lane.empty_spool_weight = self._get_filament_values(result, 'spool_weight', default=190)
                     cur_lane.weight             = self._get_filament_values(result, 'remaining_weight')
+                    cur_lane.espooler.espooler_values.full_weight = self._get_filament_values(result, 'initial_weight', default=1000)
 
                     weight_check = self.disable_weight_check
 
@@ -450,12 +460,12 @@ class AFCSpool:
         previous_id = self.next_spool_id
         if SpoolID != '':
             try:
-                self.next_spool_id = str(int(SpoolID)) # make sure spool ID will round trip later
+                self.next_spool_id = int(SpoolID)
             except ValueError:
                 self.logger.error("Invalid spool ID: {}".format(SpoolID))
-                self.next_spool_id = ''
+                self.next_spool_id = None
         else:
-            self.next_spool_id = ''
+            self.next_spool_id = None
         if previous_id:
             self.logger.info(f"Spool ID '{previous_id}' being overwritten for next load: '{self.next_spool_id}'")
         else:
