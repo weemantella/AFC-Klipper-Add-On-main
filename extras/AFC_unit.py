@@ -54,8 +54,10 @@ class afcUnit:
         self.short_moves_speed           = config.getfloat("short_moves_speed", self.afc.short_moves_speed) # Speed in mm/s to move filament when doing short moves. Setting value here overrides values set in AFC.cfg file
         self.short_moves_accel           = config.getfloat("short_moves_accel", self.afc.short_moves_accel) # Acceleration in mm/s squared when doing short moves. Setting value here overrides values set in AFC.cfg file
         self.short_move_dis              = config.getfloat("short_move_dis", self.afc.short_move_dis)       # Move distance in mm for failsafe moves. Setting value here overrides values set in AFC.cfg file
-        self.max_move_dis                = config.getfloat("max_move_dis", self.afc.max_move_dis)            # Maximum distance to move filament. AFC breaks filament moves over this number into multiple moves. Useful to lower this number if running into timer too close errors when doing long filament moves. Setting value here overrides values set in AFC.cfg file
-        self.debug                       = config.getboolean("debug",            False)                      # Turns on/off debug messages to console
+        self.max_move_dis                = config.getfloat("max_move_dis", self.afc.max_move_dis)           # Maximum distance to move filament. AFC breaks filament moves over this number into multiple moves. Useful to lower this number if running into timer too close errors when doing long filament moves. Setting value here overrides values set in AFC.cfg file
+        self.auto_home_to_hub            = config.get('auto_home_to_hub', self.afc.auto_home_to_hub)        # Auto-home to hub setting. Setting value here overrides values set in AFC.cfg file
+        self.auto_home_to_tool           = config.get('auto_home_to_tool', self.afc.auto_home_to_tool)      # Auto-home to tool setting. Setting value here overrides values set in AFC.cfg file
+        self.debug                       = config.getboolean("debug", False)                                # Turns on/off debug messages to console
         self.rev_long_moves_speed_factor = config.getfloat("rev_long_moves_speed_factor", self.afc.rev_long_moves_speed_factor)
 
         # Espooler defines

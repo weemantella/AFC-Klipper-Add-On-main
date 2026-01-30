@@ -117,6 +117,8 @@ class AFCLane:
         self.short_moves_speed  = config.getfloat("short_moves_speed", None)            # Speed in mm/s to move filament when doing short moves. Setting value here overrides values set in unit(AFC_BoxTurtle/NightOwl/etc) section
         self.short_moves_accel  = config.getfloat("short_moves_accel", None)            # Acceleration in mm/s squared when doing short moves. Setting value here overrides values set in unit(AFC_BoxTurtle/NightOwl/etc) section
         self.short_move_dis     = config.getfloat("short_move_dis", None)               # Move distance in mm for failsafe moves. Setting value here overrides values set in unit(AFC_BoxTurtle/NightOwl/etc) section
+        self.auto_home_to_hub   = config.get('auto_home_to_hub', None)                  # Auto-home to hub setting for this lane. Setting value here overrides values set in unit or AFC.cfg file
+        self.auto_home_to_tool  = config.get('auto_home_to_tool', None)                 # Auto-home to tool setting for this lane. Setting value here overrides values set in unit or AFC.cfg file
         self.max_move_dis       = config.getfloat("max_move_dis", None)                 # Maximum distance to move filament. AFC breaks filament moves over this number into multiple moves. Useful to lower this number if running into timer too close errors when doing long filament moves. Setting value here overrides values set in unit(AFC_BoxTurtle/NightOwl/etc) section
         self.n20_break_delay_time= config.getfloat("n20_break_delay_time", None)        # Time to wait between breaking n20 motors(nSleep/FWD/RWD all 1) and then releasing the break to allow coasting. Setting value here overrides values set in unit(AFC_BoxTurtle/NightOwl/etc) section
 
